@@ -18,6 +18,7 @@ RUN set -eux; \
       libpq-dev \
       libgomp1 \
       libglib2.0-0 libsm6 libxext6 libxrender1 libgl1 \
+      tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
     ; \
     rm -rf /var/lib/apt/lists/*
 

@@ -49,6 +49,8 @@ class OCRService:
             # 根据引擎选择识别方法
             if self.engine == "paddleocr":
                 result = await self._recognize_with_paddleocr(image_path)
+            elif self.engine == "tesseract":
+                result = await self._recognize_with_tesseract(image_path)
             elif self.engine == "aliyun":
                 result = await self._recognize_with_aliyun(image_path)
             elif self.engine == "tencentcloud":
@@ -115,6 +117,48 @@ class OCRService:
             
         except Exception as e:
             logger.error(f"PaddleOCR识别失败: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    async def _recognize_with_tesseract(self, image_path: str) -> Dict:
+        """使用 Tesseract 识别（Linux 方案）"""
+        try:
+            # 延迟导入，避免在未安装时引起 ImportError
+            import pytesseract
+            from PIL import Image
+
+            # 语言映射：默认为英文，中文使用简体包
+            lang_cfg = settings.PADDLEOCR_LANG.lower() if settings.PADDLEOCR_LANG else "eng"
+            if lang_cfg.startswith("ch"):
+                tess_lang = "chi_sim"
+            elif lang_cfg.startswith("en"):
+                tess_lang = "eng"
+            else:
+                tess_lang = "eng"
+
+            img = Image.open(image_path)
+            text = pytesseract.image_to_string(img, lang=tess_lang)
+
+            # Tesseract 没有置信度统一输出，这里简单返回
+            full_text = text.strip()
+            if not full_text:
+                return {
+                    "success": False,
+                    "error": "未识别到文本"
+                }
+
+            logger.info("Tesseract 识别成功")
+            return {
+                "success": True,
+                "text": full_text,
+                "confidence": None,
+                "lines": [line for line in full_text.splitlines() if line.strip()],
+                "engine": "tesseract"
+            }
+        except Exception as e:
+            logger.error(f"Tesseract 识别失败: {e}")
             return {
                 "success": False,
                 "error": str(e)

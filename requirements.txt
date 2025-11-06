@@ -20,12 +20,17 @@ hiredis==2.2.3
 # Celery (异步任务)
 celery[redis]==5.3.4
 
-# OCR
-paddleocr==2.7.0.3
-paddlepaddle>=2.6.1  # 使用2.6或更高版本
-opencv-python-headless>=4.8.0  # 使用更灵活的版本要求
+# OCR（Docker/Linux 默认不安装 PaddleOCR，避免 PyMuPDF 冲突）
+# 如需在 Windows 本机启用，请取消下行注释中的平台条件
+paddleocr==2.7.0.3; sys_platform == 'win32' and python_version < '3.11'
+paddlepaddle>=2.6.1; sys_platform == 'win32' and python_version < '3.11'
+opencv-python-headless>=4.8.0
 Pillow>=10.0.0
-PyMuPDF>=1.23.0  # 预先指定，使用预编译版本
+# 仅在 Windows 环境使用较新的 PyMuPDF 以获取预编译轮子，避免编译失败
+PyMuPDF>=1.23.0; sys_platform == 'win32'
+
+# Linux OCR（Tesseract）
+pytesseract>=0.3.10
 
 # 工具库
 python-dotenv==1.0.0
