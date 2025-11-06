@@ -1,0 +1,12 @@
+代码改动：
+Bot/Celery 不带热重载，需重启对应容器。
+命令：docker compose restart bot celery_worker celery_beat flower
+.env 改动：
+需重建容器才会载入新环境变量（restart 不会生效）。
+命令：docker compose up -d --force-recreate
+依赖或 Dockerfile 改动（requirements.txt、Dockerfile）：
+需重建镜像并重启容器。
+命令：
+docker compose build
+docker compose up -d
+FastAPI api 容器带 --reload，代码改动可自动重载；其余容器需重启。
