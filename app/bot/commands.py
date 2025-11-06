@@ -376,32 +376,29 @@ async def order_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if lang == "en":
             order_text = (
                 "📋 Order Query\n\n"
-                "📝 Usage:\n"
+                    "📝 Usage (commands only):\n"
                 "<code>/order ORDER_NUMBER</code>\n\n"
                 "📋 Example:\n"
                 "<code>/order ORDER123456</code>\n\n"
-                "💡 You can also:\n"
-                "• Send order number directly\n"
-                "• Send order screenshot (with caption for faster query)\n"
-                "• Send image + order number as caption\n\n"
+                    "💡 You can also:\n"
+                    "• Send order screenshot (with caption for faster query)\n"
+                    "• Send image + order number as caption\n\n"
                 "🔙 Send /cancel to cancel"
             )
         else:
             order_text = (
                 "📋 订单查询\n\n"
-                "📝 使用方法：\n"
+                    "📝 使用方法（仅限命令）：\n"
                 "<code>/order 订单号</code>\n\n"
                 "📋 示例：\n"
                 "<code>/order ORDER123456</code>\n\n"
-                "💡 您也可以：\n"
-                "• 直接发送订单号文本\n"
-                "• 发送订单截图（配文字说明更快）\n"
-                "• 发送图片 + 订单号作为图片说明\n\n"
+                    "💡 您也可以：\n"
+                    "• 发送订单截图（配文字说明更快）\n"
+                    "• 发送图片 + 订单号作为图片说明\n\n"
                 "🔙 发送 /cancel 取消查询"
             )
         
-        # 设置等待订单号状态
-        context.user_data['awaiting_order_id'] = True
+        # 不再进入等待文本模式（仅响应命令与图片）
         await update.message.reply_text(order_text, parse_mode='HTML')
 
 

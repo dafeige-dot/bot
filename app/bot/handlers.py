@@ -37,11 +37,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_broadcast_message(update, context, text)
         return
     
-    # 默认回复
-    await update.message.reply_text(
-        "我不太明白您的意思。\n"
-        "请使用 /help 查看可用命令。"
-    )
+    # 普通文本消息不再回复（仅处理命令与图片）
+    return
 
 
 async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
