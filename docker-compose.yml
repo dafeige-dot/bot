@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: merchant_bot_postgres
+    environment:
+      POSTGRES_USER: merchant_user
+      POSTGRES_PASSWORD: merchant_password_2024
+      POSTGRES_DB: merchant_bot_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U merchant_user -d merchant_bot_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - bot_network
+
+  # Redis 缓存和消息队列
+  redis:
+    image: redis:7-alpine
+    container_name: merchant_bot_redis
+    command: redis-server --appendonly yes --requirepass redis_password_2024
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - bot_network
+
+  # Telegram Bot 主服务
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: merchant_bot_app
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - ./temp:/app/temp
+    command: python app/main.py
+    restart: unless-stopped
+    networks:
+      - bot_network
+
+  # Celery Worker (异步任务)
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: merchant_bot_celery
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - ./temp:/app/temp
+    command: celery -A app.tasks.celery_tasks worker --loglevel=info --concurrency=4
+    restart: unless-stopped
+    networks:
+      - bot_network
+
+  # Celery Beat (定时任务调度)
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: merchant_bot_celery_beat
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    command: celery -A app.tasks.celery_tasks beat --loglevel=info
+    restart: unless-stopped
+    networks:
+      - bot_network
+
+  # Flower (Celery监控，可选)
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: merchant_bot_flower
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "5555:5555"
+    command: celery -A app.tasks.celery_tasks flower --port=5555
+    restart: unless-stopped
+    networks:
+      - bot_network
+
+  # FastAPI 管理后台 (可选)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: merchant_bot_api
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+    networks:
+      - bot_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  bot_network:
+    driver: bridge
+

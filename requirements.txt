@@ -1,0 +1,58 @@
+# Telegram Bot
+python-telegram-bot==20.7
+python-telegram-bot[webhooks]==20.7
+
+# Web Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+alembic==1.13.0
+
+# Redis (celery[redis] 会自动安装兼容版本的 redis 包，无需单独指定)
+hiredis==2.2.3
+
+# Celery (异步任务)
+celery[redis]==5.3.4
+
+# OCR
+paddleocr==2.7.0.3
+paddlepaddle>=2.6.1  # 使用2.6或更高版本
+opencv-python-headless>=4.8.0  # 使用更灵活的版本要求
+Pillow>=10.0.0
+PyMuPDF>=1.23.0  # 预先指定，使用预编译版本
+
+# 工具库
+python-dotenv==1.0.0
+loguru==0.7.2
+pytz==2023.3.post1
+python-dateutil==2.8.2
+
+# HTTP客户端
+httpx==0.25.2
+aiohttp==3.9.1
+
+# 数据验证和序列化
+marshmallow==3.20.1
+
+# 安全
+cryptography==41.0.7
+python-jose[cryptography]==3.3.0
+
+# 监控和日志
+prometheus-client==0.19.0
+sentry-sdk==1.39.1
+
+# 开发工具
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+black==23.12.0
+flake8==6.1.0
+mypy==1.7.1
+
