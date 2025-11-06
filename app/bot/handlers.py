@@ -203,10 +203,40 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             return
         
+        # 尝试提取支付信息（金额、UTR、UPI）
+        from app.utils.payment_ocr import parse_payment_screenshot
+        payment_info = parse_payment_screenshot(ocr_result.get('text', ''))
+        
+        # 如果识别到 UPI，优先处理 UPI 查询
+        if payment_info.get('upi'):
+            await handle_upi_check(
+                update, context, processing_msg, 
+                merchant, payment_info, lang
+            )
+            return
+        
         # 提取订单号
         order_nos = ocr_result.get('order_numbers', [])
         
         if not order_nos:
+            # 如果没有订单号，但有支付信息，显示支付信息
+            if payment_info.get('amount') or payment_info.get('utr'):
+                payment_text = "🧾 识别到支付信息：\n\n"
+                if payment_info.get('amount'):
+                    payment_text += f"💰 金额: ₹{payment_info['amount']}\n"
+                if payment_info.get('utr'):
+                    payment_text += f"🔢 UTR: {payment_info['utr']}\n"
+                if payment_info.get('sender'):
+                    payment_text += f"👤 付款人: {payment_info['sender']}\n"
+                if payment_info.get('bank'):
+                    payment_text += f"🏦 银行: {payment_info['bank']}\n"
+                
+                payment_text += "\n⚠️ 未找到 UPI 地址\n"
+                payment_text += "💡 如需查询订单，请发送订单号"
+                
+                await processing_msg.edit_text(payment_text)
+                return
+            
             if lang == 'en':
                 await processing_msg.edit_text(
                     "❓ No order number found\n\n"
@@ -313,6 +343,76 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ 处理失败\n\n"
                 f"发生了一些错误，请稍后重试。"
             )
+
+
+async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
+                          processing_msg, merchant, payment_info: dict, lang: str):
+    """处理 UPI 查询"""
+    from app.utils.api_client import api_client
+    
+    upi = payment_info.get('upi')
+    utr = payment_info.get('utr')
+    amount = payment_info.get('amount')
+    
+    logger.info(f"开始 UPI 查询: UPI={upi}, UTR={utr}, Amount={amount}")
+    
+    try:
+        # 调用后端 API 查询 UPI
+        result = await api_client.check_upi(merchant.merchant_code, upi)
+        
+        # 构建显示信息
+        payment_text = "🧾 识别到支付信息：\n\n"
+        if amount:
+            payment_text += f"💰 金额: ₹{amount}\n"
+        if utr:
+            payment_text += f"🔢 UTR: {utr}\n"
+        payment_text += f"📱 UPI: {upi}\n"
+        if payment_info.get('sender'):
+            payment_text += f"👤 付款人: {payment_info['sender']}\n"
+        if payment_info.get('bank'):
+            payment_text += f"🏦 银行: {payment_info['bank']}\n"
+        
+        payment_text += "\n" + "="*30 + "\n\n"
+        
+        # 处理 UPI 查询结果
+        if result.get("code") == 200:
+            is_upi = result.get("is_upi", 0)
+            
+            if is_upi == 1:
+                # UPI 是我们的
+                payment_text += "✅ 这是我们的 UPI 地址\n\n"
+                if utr:
+                    payment_text += (
+                        f"⚠️ 但是 UTR {utr} 可能:\n"
+                        f"• UTR 不正确\n"
+                        f"• 或已被其他商户领取\n\n"
+                        f"📞 请联系客服确认\n"
+                    )
+                else:
+                    payment_text += "💡 请提供 UTR 以便进一步核实"
+            else:
+                # UPI 不是我们的
+                payment_text += (
+                    f"❌ 这不是我们的 UPI 地址\n\n"
+                    f"⚠️ 请确认:\n"
+                    f"• UPI 地址是否正确\n"
+                    f"• 是否转错账户\n\n"
+                    f"📞 如有疑问请联系客服"
+                )
+        else:
+            # 查询失败
+            error_msg = result.get("msg", "Unknown error")
+            payment_text += f"❌ UPI 查询失败\n\n错误: {error_msg}"
+        
+        await processing_msg.edit_text(payment_text)
+        logger.info(f"UPI 查询完成: is_upi={result.get('is_upi', 'N/A')}")
+        
+    except Exception as e:
+        logger.exception(f"UPI 查询异常: {e}")
+        await processing_msg.edit_text(
+            "❌ UPI 查询失败\n\n"
+            "系统错误，请稍后重试"
+        )
 
 
 async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE, order_no: str):

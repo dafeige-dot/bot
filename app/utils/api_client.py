@@ -163,6 +163,14 @@ class BackendAPIClient:
         参数:
             merchant_id: 商户号
             upi: UPI
+        
+        返回:
+            {
+                "code": 200,
+                "msg": "success",
+                "is_upi": 0/1,  # 1表示是我们的UPI，0表示不是
+                "data": {...}
+            }
         """
         return await self._post("check_upi", {
             "merchant_id": merchant_id,
