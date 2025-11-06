@@ -216,11 +216,11 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
         else:
             # 统一容错提示
-            text = "❌ 订单查询失败，请联系客服处理"
+            text = "暂未收到"
         
         await status_msg.edit_text(text)
     except Exception:
-        await status_msg.edit_text("❌ 订单查询失败，请联系客服处理")
+        await status_msg.edit_text("暂未收到")
 
 async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /balance 命令"""

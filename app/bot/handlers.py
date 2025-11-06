@@ -394,13 +394,13 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
                     f"📞 如有疑问请联系客服"
                 )
         else:
-            payment_text += "❌ 订单查询失败，请联系客服处理"
+            payment_text += "暂未收到"
         
         await processing_msg.edit_text(payment_text)
         logger.info(f"UPI 查询完成: is_upi={result.get('is_upi', 'N/A')}")
         
     except Exception:
-        await processing_msg.edit_text("❌ 订单查询失败，请联系客服处理")
+        await processing_msg.edit_text("暂未收到")
 
 
 async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE, order_no: str):
