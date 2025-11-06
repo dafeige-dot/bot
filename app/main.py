@@ -60,6 +60,8 @@ def setup_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("ye", commands.balance_command))
     application.add_handler(CommandHandler("query", commands.balance_command))
     application.add_handler(CommandHandler("order", commands.order_command))
+    # UPI 连通性测试命令（不在菜单中）
+    application.add_handler(CommandHandler("upi", commands.upi_command))
     # 订单查询别名
     application.add_handler(CommandHandler("cd", commands.order_command))
     application.add_handler(CommandHandler("zd", commands.order_command))

@@ -172,6 +172,56 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text)
 
 
+async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /upi 命令 - 直接校验 UPI 连通性（跳过OCR）"""
+    user = update.effective_user
+    chat = update.effective_chat
+    
+    # 参数校验
+    if not context.args or len(context.args) < 1:
+        await update.message.reply_text(
+            "用法：/upi <upi地址>\n\n"
+            "示例：/upi ppqr01.jwjczm@iob"
+        )
+        return
+    
+    upi = context.args[0].strip()
+    
+    # 获取绑定的商户
+    merchant_service = MerchantService()
+    merchant = await merchant_service.get_by_telegram_id(chat.id)
+    if not merchant:
+        await update.message.reply_text("❌ 当前聊天尚未绑定商户，请先 /bind 商户号")
+        return
+    
+    # 提示处理中
+    status_msg = await update.message.reply_text("🔍 正在校验 UPI，请稍候...")
+    
+    try:
+        from app.utils.api_client import api_client
+        result = await api_client.check_upi(merchant.merchant_code, upi)
+        
+        # 接口成功且可识别
+        if isinstance(result, dict) and result.get("code") == 200 and isinstance(result.get("is_upi"), int):
+            is_upi = 1 if result.get("is_upi") == 1 else 0
+            if is_upi == 1:
+                text = (
+                    "✅ 这是我们的 UPI 地址\n\n"
+                    "⚠️ 如有 UTR 可一并提供以便进一步核实"
+                )
+            else:
+                text = (
+                    "❌ 这不是我们的 UPI 地址\n\n"
+                    "请检查是否填错或转错账户"
+                )
+        else:
+            # 统一容错提示
+            text = "❌ 订单查询失败，请联系客服处理"
+        
+        await status_msg.edit_text(text)
+    except Exception:
+        await status_msg.edit_text("❌ 订单查询失败，请联系客服处理")
+
 async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /balance 命令"""
     user = update.effective_user

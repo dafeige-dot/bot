@@ -374,12 +374,10 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
         
         payment_text += "\n" + "="*30 + "\n\n"
         
-        # 处理 UPI 查询结果
-        if result.get("code") == 200:
-            is_upi = result.get("is_upi", 0)
-            
+        # 处理 UPI 查询结果（容错）
+        if isinstance(result, dict) and result.get("code") == 200 and isinstance(result.get("is_upi"), int):
+            is_upi = 1 if result.get("is_upi") == 1 else 0
             if is_upi == 1:
-                # UPI 是我们的
                 payment_text += "✅ 这是我们的 UPI 地址\n\n"
                 if utr:
                     payment_text += (
@@ -391,7 +389,6 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 else:
                     payment_text += "💡 请提供 UTR 以便进一步核实"
             else:
-                # UPI 不是我们的
                 payment_text += (
                     f"❌ 这不是我们的 UPI 地址\n\n"
                     f"⚠️ 请确认:\n"
@@ -400,19 +397,13 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
                     f"📞 如有疑问请联系客服"
                 )
         else:
-            # 查询失败
-            error_msg = result.get("msg", "Unknown error")
-            payment_text += f"❌ UPI 查询失败\n\n错误: {error_msg}"
+            payment_text += "❌ 订单查询失败，请联系客服处理"
         
         await processing_msg.edit_text(payment_text)
         logger.info(f"UPI 查询完成: is_upi={result.get('is_upi', 'N/A')}")
         
-    except Exception as e:
-        logger.exception(f"UPI 查询异常: {e}")
-        await processing_msg.edit_text(
-            "❌ UPI 查询失败\n\n"
-            "系统错误，请稍后重试"
-        )
+    except Exception:
+        await processing_msg.edit_text("❌ 订单查询失败，请联系客服处理")
 
 
 async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE, order_no: str):
