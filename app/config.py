@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     API_HOST: str = Field(default="0.0.0.0", env="API_HOST")
     API_PORT: int = Field(default=8000, env="API_PORT")
     
+    # ===== 后端API配置 =====
+    BACKEND_API_URL: str = Field(default="http://127.0.0.1:60010/httpapi/telegram", env="BACKEND_API_URL")
+    BACKEND_API_TIMEOUT: int = Field(default=30, env="BACKEND_API_TIMEOUT")
+    
     # ===== 安全配置 =====
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     JWT_SECRET_KEY: str = Field(..., env="JWT_SECRET_KEY")

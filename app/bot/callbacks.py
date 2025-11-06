@@ -14,6 +14,7 @@ from app.bot.keyboards import (
 from app.services.merchant import MerchantService
 from app.services.balance import BalanceService
 from app.config import settings
+from app.bot.language import language_callback
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -25,6 +26,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     callback_data = query.data
     logger.info(f"用户 {user.id} 点击了按钮: {callback_data}")
+    
+    # 语言切换
+    if callback_data.startswith("lang_"):
+        lang_code = callback_data.split("_")[1]
+        await language_callback(query, user.id, lang_code)
+        return
     
     # 路由到不同的处理函数
     if callback_data == "main_menu":
@@ -141,17 +148,36 @@ async def show_history(query, context):
 
 async def prompt_upload(query, context):
     """提示上传图片"""
-    upload_text = (
-        "📸 图片识别\n\n"
-        "请上传订单截图，我将为您识别订单号。\n\n"
-        "💡 提示：\n"
-        "• 图片要清晰\n"
-        "• 订单号要完整\n"
-        "• 大小不超过10MB"
-    )
+    user = query.from_user
+    
+    # 获取用户语言
+    merchant_service = MerchantService()
+    merchant = await merchant_service.get_by_telegram_id(user.id)
+    
+    if merchant and merchant.language == 'en':
+        upload_text = (
+            "📸 Image Recognition\n\n"
+            "Please upload order screenshot, I will recognize the order number for you.\n\n"
+            "💡 Tips:\n"
+            "• Image should be clear\n"
+            "• Order number should be complete\n"
+            "• Size should not exceed 10MB\n\n"
+            "📤 Ready to receive your image..."
+        )
+    else:
+        upload_text = (
+            "📸 图片识别\n\n"
+            "请上传订单截图，我将为您识别订单号。\n\n"
+            "💡 提示：\n"
+            "• 图片要清晰\n"
+            "• 订单号要完整\n"
+            "• 大小不超过10MB\n\n"
+            "📤 准备接收您的图片..."
+        )
     
     await query.edit_message_text(upload_text)
-    context.user_data["awaiting_image"] = True
+    # 设置等待图片上传标志
+    context.user_data["awaiting_image_upload"] = True
 
 
 async def show_help(query, context):

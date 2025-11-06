@@ -28,15 +28,13 @@ async def post_init_commands(application: Application) -> None:
     """设置Bot命令菜单"""
     logger.info("Bot初始化完成，开始运行...")
     
-    # 设置Bot命令菜单
+    # 设置Bot命令菜单（中文）
     await application.bot.set_my_commands([
-        ("start", "开始使用机器人"),
-        ("help", "获取帮助信息"),
-        ("balance", "查询余额"),
-        ("orders", "查询订单"),
-        ("history", "交易历史"),
-        ("upload", "上传图片识别订单"),
-        ("cancel", "取消当前操作"),
+        ("start", "开始使用 / Start"),
+        ("language", "切换语言 / Change Language"),
+        ("balance", "余额 / Balance"),
+        ("order", "订单 / Order"),
+        ("help", "帮助 / Help"),
     ])
     
     # 如果是管理员，添加管理命令
@@ -56,13 +54,26 @@ def setup_handlers(application: Application) -> None:
     # 命令处理器
     application.add_handler(CommandHandler("start", commands.start_command))
     application.add_handler(CommandHandler("help", commands.help_command))
+    application.add_handler(CommandHandler("myid", commands.myid_command))
     application.add_handler(CommandHandler("balance", commands.balance_command))
-    application.add_handler(CommandHandler("orders", commands.orders_command))
+    # 余额查询别名
+    application.add_handler(CommandHandler("ye", commands.balance_command))
+    application.add_handler(CommandHandler("query", commands.balance_command))
+    application.add_handler(CommandHandler("order", commands.order_command))
+    # 订单查询别名
+    application.add_handler(CommandHandler("cd", commands.order_command))
+    application.add_handler(CommandHandler("zd", commands.order_command))
     application.add_handler(CommandHandler("history", commands.history_command))
     application.add_handler(CommandHandler("upload", commands.upload_command))
     application.add_handler(CommandHandler("cancel", commands.cancel_command))
+    application.add_handler(CommandHandler("reset", commands.reset_command))
+    
+    # 语言切换
+    from app.bot.language import language_command
+    application.add_handler(CommandHandler("language", language_command))
     
     # 管理员命令
+    application.add_handler(CommandHandler("bind", commands.bind_command))
     application.add_handler(CommandHandler("broadcast", commands.broadcast_command))
     application.add_handler(CommandHandler("stats", commands.stats_command))
     application.add_handler(CommandHandler("merchants", commands.merchants_command))

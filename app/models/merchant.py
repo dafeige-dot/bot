@@ -33,7 +33,7 @@ class Merchant(Base):
     last_name = Column(String(255), nullable=True, comment="姓氏")
     
     # 商户信息
-    merchant_code = Column(String(50), unique=True, nullable=False, index=True, comment="商户编号")
+    merchant_code = Column(String(50), nullable=False, index=True, comment="商户编号")
     merchant_name = Column(String(255), nullable=False, comment="商户名称")
     contact_phone = Column(String(50), nullable=True, comment="联系电话")
     contact_email = Column(String(255), nullable=True, comment="联系邮箱")
@@ -52,7 +52,7 @@ class Merchant(Base):
     permissions = Column(Text, nullable=True, comment="权限列表(JSON)")
     
     # 其他信息
-    language = Column(String(10), default="zh-CN", nullable=False, comment="语言偏好")
+    language = Column(String(10), default="zh", nullable=False, comment="语言偏好 (zh/en)")
     timezone = Column(String(50), default="Asia/Shanghai", nullable=False, comment="时区")
     notes = Column(Text, nullable=True, comment="备注")
     
