@@ -75,6 +75,8 @@ def setup_handlers(application: Application) -> None:
     # 管理员命令
     application.add_handler(CommandHandler("bind", commands.bind_command))
     application.add_handler(CommandHandler("broadcast", commands.broadcast_command))
+    # 广播别名
+    application.add_handler(CommandHandler("gb", commands.broadcast_command))
     application.add_handler(CommandHandler("stats", commands.stats_command))
     application.add_handler(CommandHandler("merchants", commands.merchants_command))
     

@@ -176,13 +176,20 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /upi 命令 - 直接校验 UPI 连通性（跳过OCR）"""
     user = update.effective_user
     chat = update.effective_chat
+    lang = get_language(user.id)
     
     # 参数校验
     if not context.args or len(context.args) < 1:
-        await update.message.reply_text(
-            "用法：/upi <upi地址>\n\n"
-            "示例：/upi ppqr01.jwjczm@iob"
-        )
+        if lang == 'en':
+            await update.message.reply_text(
+                "Usage: /upi <upi address>\n\n"
+                "Example: /upi ppqr01.jwjczm@iob"
+            )
+        else:
+            await update.message.reply_text(
+                "用法：/upi <upi地址>\n\n"
+                "示例：/upi ppqr01.jwjczm@iob"
+            )
         return
     
     upi = context.args[0].strip()
@@ -191,11 +198,14 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     merchant_service = MerchantService()
     merchant = await merchant_service.get_by_telegram_id(chat.id)
     if not merchant:
-        await update.message.reply_text("❌ 当前聊天尚未绑定商户，请先 /bind 商户号")
+        if lang == 'en':
+            await update.message.reply_text("❌ This chat is not bound yet. Please /bind merchant code first")
+        else:
+            await update.message.reply_text("❌ 当前聊天尚未绑定商户，请先 /bind 商户号")
         return
     
     # 提示处理中
-    status_msg = await update.message.reply_text("🔍 正在校验 UPI，请稍候...")
+    status_msg = await update.message.reply_text("🔍 Checking UPI, please wait..." if lang == 'en' else "🔍 正在校验 UPI，请稍候...")
     
     try:
         from app.utils.api_client import api_client
@@ -205,22 +215,34 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if isinstance(result, dict) and result.get("code") == 200 and isinstance(result.get("is_upi"), int):
             is_upi = 1 if result.get("is_upi") == 1 else 0
             if is_upi == 1:
-                text = (
-                    "✅ 这是我们的 UPI 地址\n\n"
-                    "⚠️ 如有 UTR 可一并提供以便进一步核实"
-                )
+                if lang == 'en':
+                    text = (
+                        "✅ This is our UPI address\n\n"
+                        "⚠️ If you have a UTR, please provide it for further verification"
+                    )
+                else:
+                    text = (
+                        "✅ 这是我们的 UPI 地址\n\n"
+                        "⚠️ 如有 UTR 可一并提供以便进一步核实"
+                    )
             else:
-                text = (
-                    "❌ 这不是我们的 UPI 地址\n\n"
-                    "请检查是否填错或转错账户"
-                )
+                if lang == 'en':
+                    text = (
+                        "❌ This is not our UPI address\n\n"
+                        "Please check whether the address is wrong or funds were transferred to a wrong account"
+                    )
+                else:
+                    text = (
+                        "❌ 这不是我们的 UPI 地址\n\n"
+                        "请检查是否填错或转错账户"
+                    )
         else:
             # 统一容错提示
-            text = "暂未收到"
+            text = "Not received yet" if lang == 'en' else "暂未收到"
         
         await status_msg.edit_text(text)
     except Exception:
-        await status_msg.edit_text("暂未收到")
+        await status_msg.edit_text("Not received yet" if lang == 'en' else "暂未收到")
 
 async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /balance 命令"""

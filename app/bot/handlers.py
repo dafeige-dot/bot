@@ -53,7 +53,11 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     merchant = await merchant_service.get_by_telegram_id(chat.id)
     
     if not merchant:
-        await update.message.reply_text("❌ 您还未注册，请先使用 /start 命令注册")
+        # 未绑定商户时提示（多语言）
+        if update.effective_user and getattr(update.effective_user, "language_code", "").startswith("en"):
+            await update.message.reply_text("❌ This chat is not bound yet. Please ask an admin to /bind in this chat.")
+        else:
+            await update.message.reply_text("❌ 当前聊天尚未绑定商户，请联系管理员在此聊天使用 /bind 进行绑定")
         return
     
     # 获取用户语言
@@ -218,18 +222,30 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not order_nos:
             # 如果没有订单号，但有支付信息，显示支付信息
             if payment_info.get('amount') or payment_info.get('utr'):
-                payment_text = "🧾 识别到支付信息：\n\n"
-                if payment_info.get('amount'):
-                    payment_text += f"💰 金额: ₹{payment_info['amount']}\n"
-                if payment_info.get('utr'):
-                    payment_text += f"🔢 UTR: {payment_info['utr']}\n"
-                if payment_info.get('sender'):
-                    payment_text += f"👤 付款人: {payment_info['sender']}\n"
-                if payment_info.get('bank'):
-                    payment_text += f"🏦 银行: {payment_info['bank']}\n"
-                
-                payment_text += "\n⚠️ 未找到 UPI 地址\n"
-                payment_text += "💡 如需查询订单，请发送订单号"
+                if lang == 'en':
+                    payment_text = "🧾 Detected payment info:\n\n"
+                    if payment_info.get('amount'):
+                        payment_text += f"💰 Amount: ₹{payment_info['amount']}\n"
+                    if payment_info.get('utr'):
+                        payment_text += f"🔢 UTR: {payment_info['utr']}\n"
+                    if payment_info.get('sender'):
+                        payment_text += f"👤 Payer: {payment_info['sender']}\n"
+                    if payment_info.get('bank'):
+                        payment_text += f"🏦 Bank: {payment_info['bank']}\n"
+                    payment_text += "\n⚠️ No UPI address found\n"
+                    payment_text += "💡 To query an order, please send the order number"
+                else:
+                    payment_text = "🧾 识别到支付信息：\n\n"
+                    if payment_info.get('amount'):
+                        payment_text += f"💰 金额: ₹{payment_info['amount']}\n"
+                    if payment_info.get('utr'):
+                        payment_text += f"🔢 UTR: {payment_info['utr']}\n"
+                    if payment_info.get('sender'):
+                        payment_text += f"👤 付款人: {payment_info['sender']}\n"
+                    if payment_info.get('bank'):
+                        payment_text += f"🏦 银行: {payment_info['bank']}\n"
+                    payment_text += "\n⚠️ 未找到 UPI 地址\n"
+                    payment_text += "💡 如需查询订单，请发送订单号"
                 
                 await processing_msg.edit_text(payment_text)
                 return
@@ -358,16 +374,28 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
         result = await api_client.check_upi(merchant.merchant_code, upi)
         
         # 构建显示信息
-        payment_text = "🧾 识别到支付信息：\n\n"
-        if amount:
-            payment_text += f"💰 金额: ₹{amount}\n"
-        if utr:
-            payment_text += f"🔢 UTR: {utr}\n"
-        payment_text += f"📱 UPI: {upi}\n"
-        if payment_info.get('sender'):
-            payment_text += f"👤 付款人: {payment_info['sender']}\n"
-        if payment_info.get('bank'):
-            payment_text += f"🏦 银行: {payment_info['bank']}\n"
+        if lang == 'en':
+            payment_text = "🧾 Detected payment info:\n\n"
+            if amount:
+                payment_text += f"💰 Amount: ₹{amount}\n"
+            if utr:
+                payment_text += f"🔢 UTR: {utr}\n"
+            payment_text += f"📱 UPI: {upi}\n"
+            if payment_info.get('sender'):
+                payment_text += f"👤 Payer: {payment_info['sender']}\n"
+            if payment_info.get('bank'):
+                payment_text += f"🏦 Bank: {payment_info['bank']}\n"
+        else:
+            payment_text = "🧾 识别到支付信息：\n\n"
+            if amount:
+                payment_text += f"💰 金额: ₹{amount}\n"
+            if utr:
+                payment_text += f"🔢 UTR: {utr}\n"
+            payment_text += f"📱 UPI: {upi}\n"
+            if payment_info.get('sender'):
+                payment_text += f"👤 付款人: {payment_info['sender']}\n"
+            if payment_info.get('bank'):
+                payment_text += f"🏦 银行: {payment_info['bank']}\n"
         
         payment_text += "\n" + "="*30 + "\n\n"
         
@@ -375,32 +403,53 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
         if isinstance(result, dict) and result.get("code") == 200 and isinstance(result.get("is_upi"), int):
             is_upi = 1 if result.get("is_upi") == 1 else 0
             if is_upi == 1:
-                payment_text += "✅ 这是我们的 UPI 地址\n\n"
-                if utr:
+                if lang == 'en':
+                    payment_text += "✅ This is our UPI address\n\n"
+                    if utr:
+                        payment_text += (
+                            f"⚠️ However, UTR {utr} may:\n"
+                            f"• Be incorrect\n"
+                            f"• Or already be claimed by another merchant\n\n"
+                            f"📞 Please contact support to confirm\n"
+                        )
+                    else:
+                        payment_text += "💡 Please provide UTR for further verification"
+                else:
+                    payment_text += "✅ 这是我们的 UPI 地址\n\n"
+                    if utr:
+                        payment_text += (
+                            f"⚠️ 但是 UTR {utr} 可能:\n"
+                            f"• UTR 不正确\n"
+                            f"• 或已被其他商户领取\n\n"
+                            f"📞 请联系客服确认\n"
+                        )
+                    else:
+                        payment_text += "💡 请提供 UTR 以便进一步核实"
+            else:
+                if lang == 'en':
                     payment_text += (
-                        f"⚠️ 但是 UTR {utr} 可能:\n"
-                        f"• UTR 不正确\n"
-                        f"• 或已被其他商户领取\n\n"
-                        f"📞 请联系客服确认\n"
+                        f"❌ This is not our UPI address\n\n"
+                        f"⚠️ Please check:\n"
+                        f"• Whether the UPI address is correct\n"
+                        f"• Whether funds were transferred to the wrong account\n\n"
+                        f"📞 Contact support if needed"
                     )
                 else:
-                    payment_text += "💡 请提供 UTR 以便进一步核实"
-            else:
-                payment_text += (
-                    f"❌ 这不是我们的 UPI 地址\n\n"
-                    f"⚠️ 请确认:\n"
-                    f"• UPI 地址是否正确\n"
-                    f"• 是否转错账户\n\n"
-                    f"📞 如有疑问请联系客服"
-                )
+                    payment_text += (
+                        f"❌ 这不是我们的 UPI 地址\n\n"
+                        f"⚠️ 请确认:\n"
+                        f"• UPI 地址是否正确\n"
+                        f"• 是否转错账户\n\n"
+                        f"📞 如有疑问请联系客服"
+                    )
         else:
-            payment_text += "暂未收到"
+            payment_text += ("Not received yet" if lang == 'en' else "暂未收到")
         
         await processing_msg.edit_text(payment_text)
         logger.info(f"UPI 查询完成: is_upi={result.get('is_upi', 'N/A')}")
         
     except Exception:
-        await processing_msg.edit_text("暂未收到")
+        await processing_msg.edit_text("Not received yet" if lang == 'en' else "暂未收到")
 
 
 async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE, order_no: str):
