@@ -56,7 +56,7 @@ class PaymentOCRParser:
                     pass
         if candidates:
             best = str(int(max(candidates))) if max(candidates).is_integer() else str(max(candidates))
-            logger.info(f\"启发式金额候选: {best}\")
+            logger.info(f"启发式金额候选: {best}")
             return best
 
         return None

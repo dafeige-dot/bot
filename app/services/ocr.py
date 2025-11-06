@@ -51,6 +51,8 @@ class OCRService:
                 result = await self._recognize_with_paddleocr(image_path)
             elif self.engine == "tesseract":
                 result = await self._recognize_with_tesseract(image_path)
+            elif self.engine == "rapidocr":
+                result = await self._recognize_with_rapidocr(image_path)
             elif self.engine == "aliyun":
                 result = await self._recognize_with_aliyun(image_path)
             elif self.engine == "tencentcloud":
@@ -122,6 +124,34 @@ class OCRService:
                 "error": str(e)
             }
 
+    async def _recognize_with_rapidocr(self, image_path: str) -> Dict:
+        """使用 RapidOCR (onnxruntime) 识别（纯本地，精度高于 tesseract）"""
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            ocr = RapidOCR()  # 默认会下载模型到本地缓存
+            res, _ = ocr(image_path)
+            if not res:
+                return {
+                    "success": False,
+                    "error": "未识别到文本"
+                }
+            # res: list of [boxes, text, score]
+            lines = [item[1] for item in res if len(item) >= 2 and item[1]]
+            full_text = "\n".join(lines)
+            return {
+                "success": True,
+                "text": full_text,
+                "confidence": None,
+                "lines": lines,
+                "engine": "rapidocr"
+            }
+        except Exception as e:
+            logger.error(f"RapidOCR 识别失败: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
     async def _recognize_with_tesseract(self, image_path: str) -> Dict:
         """使用 Tesseract 识别（Linux 方案）"""
         try:
@@ -174,11 +204,57 @@ class OCRService:
     
     async def _recognize_with_tencent(self, image_path: str) -> Dict:
         """使用腾讯云OCR识别"""
-        # TODO: 实现腾讯云OCR
-        return {
-            "success": False,
-            "error": "腾讯云OCR暂未实现"
-        }
+        try:
+            import base64
+            from tencentcloud.common import credential
+            from tencentcloud.common.profile.client_profile import ClientProfile
+            from tencentcloud.common.profile.http_profile import HttpProfile
+            from tencentcloud.ocr.v20181119 import ocr_client, models
+
+            # 读取图片为 base64
+            with open(image_path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+            # 凭证与客户端
+            cred = credential.Credential(settings.TENCENT_SECRET_ID, settings.TENCENT_SECRET_KEY)
+            httpProfile = HttpProfile()
+            httpProfile.endpoint = "ocr.tencentcloudapi.com"
+            clientProfile = ClientProfile()
+            clientProfile.httpProfile = httpProfile
+            region = settings.TENCENT_OCR_REGION or "ap-guangzhou"
+            client = ocr_client.OcrClient(cred, region, clientProfile)
+
+            # 通用印刷体识别
+            req = models.GeneralBasicOCRRequest()
+            req.ImageBase64 = img_b64
+            # 自动语言
+            req.LanguageType = "auto"
+
+            resp = client.GeneralBasicOCR(req)
+            # 拼接文本
+            lines = [item.DetectedText for item in resp.TextDetections] if getattr(resp, "TextDetections", None) else []
+            full_text = "\n".join(lines)
+
+            if not full_text.strip():
+                return {
+                    "success": False,
+                    "error": "未识别到文本"
+                }
+
+            logger.info("腾讯云OCR识别成功")
+            return {
+                "success": True,
+                "text": full_text,
+                "confidence": None,
+                "lines": lines,
+                "engine": "tencentcloud"
+            }
+        except Exception as e:
+            logger.error(f"腾讯云OCR识别失败: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
     
     async def _recognize_with_baidu(self, image_path: str) -> Dict:
         """使用百度OCR识别"""
