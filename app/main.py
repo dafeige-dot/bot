@@ -30,7 +30,6 @@ async def post_init_commands(application: Application) -> None:
     
     # 设置Bot命令菜单（中文）
     await application.bot.set_my_commands([
-        ("start", "开始使用 / Start"),
         ("language", "切换语言 / Change Language"),
         ("balance", "余额 / Balance"),
         ("order", "订单 / Order"),
@@ -52,7 +51,6 @@ def setup_handlers(application: Application) -> None:
     """设置消息处理器"""
     
     # 命令处理器
-    application.add_handler(CommandHandler("start", commands.start_command))
     application.add_handler(CommandHandler("help", commands.help_command))
     application.add_handler(CommandHandler("myid", commands.myid_command))
     application.add_handler(CommandHandler("balance", commands.balance_command))
