@@ -73,71 +73,9 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 🆕 检查图片是否带有文字说明（caption）
     caption_text = update.message.caption if update.message.caption else None
-    
     if caption_text:
-        # 用户发送了图片+文字，先尝试用文字作为订单号查询
-        logger.info(f"图片附带文字: {caption_text}")
-        
-        # 调用后端 API 查询订单
-        from app.utils.api_client import api_client
-        result = await api_client.query_order(merchant.merchant_code, caption_text.strip())
-        
-        if result.get("code") == 200:
-            # 找到订单，直接返回
-            order_type = result.get("type", "")
-            status = result.get("status", 0)
-            status_desc = result.get("status_desc", "")
-            order_price = result.get("order_price", "0")
-            real_pay = result.get("real_pay", "0")
-            platform_order_no = result.get("order_num", "")
-            mch_order_no = result.get("mch_order_no", "")
-            
-            status_emoji = {
-                0: '⏳',
-                1: '🔄',
-                2: '✅',
-                3: '❌',
-            }.get(status, '❓')
-            
-            if lang == 'en':
-                type_text = "Payin Order" if order_type == "payin" else "Payout Order"
-                result_text = (
-                    f"✅ Order found!\n\n"
-                    f"{status_emoji} {type_text}\n"
-                    f"📝 Order No: {mch_order_no}\n"
-                    f"💰 Amount: ₹{order_price}\n"
-                    f"💳 Real Pay: ₹{real_pay}\n"
-                    f"📊 Status: {status_desc}\n\n"
-                    f"💡 Searched by caption: {caption_text}"
-                )
-            else:
-                type_text = "代收订单" if order_type == "payin" else "代付订单"
-                result_text = (
-                    f"✅ 找到订单！\n\n"
-                    f"{status_emoji} {type_text}\n"
-                    f"📝 订单号：{mch_order_no}\n"
-                    f"💰 订单金额：₹{order_price}\n"
-                    f"💳 实际支付：₹{real_pay}\n"
-                    f"📊 状态：{status_desc}\n\n"
-                    f"💡 通过图片说明查询: {caption_text}"
-                )
-            
-            await update.message.reply_text(result_text)
-            logger.info(f"通过图片说明找到订单: {caption_text}")
-            return
-        else:
-            # 文字查询未找到，提示将进行图片识别
-            if lang == 'en':
-                hint_msg = (
-                    f"💡 Order not found by caption '{caption_text}'\n"
-                    f"🔄 Will try to recognize the image..."
-                )
-            else:
-                hint_msg = (
-                    f"💡 图片说明 '{caption_text}' 未找到订单\n"
-                    f"🔄 将尝试识别图片..."
-                )
-            await update.message.reply_text(hint_msg)
+        # 记录caption，后续用于UTR补单
+        logger.info(f"图片附带文字(将用于补单): {caption_text}")
     
     # 获取最大的图片
     photo = update.message.photo[-1]
@@ -207,8 +145,38 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 尝试提取支付信息（金额、UTR、UPI）
         from app.utils.payment_ocr import parse_payment_screenshot
         payment_info = parse_payment_screenshot(ocr_result.get('text', ''))
+        utr = payment_info.get('utr')
+
+        # 优先处理基于UTR的新逻辑
+        # 1) 如果有caption(订单号)且识别到UTR => 调用 confirm_utr 补单
+        if caption_text:
+            if utr:
+                from app.utils.api_client import api_client
+                result = await api_client.confirm_utr(merchant.merchant_code, utr, caption_text.strip())
+                msg_text = result.get("msg", ("Not received yet" if lang == 'en' else "暂未收到"))
+                await processing_msg.edit_text(msg_text)
+                return
+            else:
+                # 有订单号但未识别到UTR，无法补单
+                if lang == 'en':
+                    await processing_msg.edit_text("❌ UTR not found in image, cannot confirm order")
+                else:
+                    await processing_msg.edit_text("❌ 未从图片中识别到 UTR，无法补单")
+                return
+
+        # 2) 仅图片上传，若识别到UTR => 调用 check_utr
+        if utr:
+            from app.utils.api_client import api_client
+            result = await api_client.check_utr(merchant.merchant_code, utr)
+            msg_text = result.get("msg", ("Not received yet" if lang == 'en' else "暂未收到"))
+            if lang == 'en':
+                text = f"utr:{utr}, {msg_text}"
+            else:
+                text = f"utr:{utr}， {msg_text}"
+            await processing_msg.edit_text(text)
+            return
         
-        # 如果识别到 UPI，优先处理 UPI 查询
+        # 如果识别到 UPI，处理 UPI 查询
         if payment_info.get('upi'):
             await handle_upi_check(
                 update, context, processing_msg, 

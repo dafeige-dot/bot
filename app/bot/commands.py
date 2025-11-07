@@ -1,6 +1,7 @@
 """
 命令处理模块
 """
+import asyncio
 from telegram import Update
 from telegram.constants import ParseMode
 from html import escape
@@ -250,6 +251,57 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text = "Not received yet" if lang == 'en' else "暂未收到"
         
         await status_msg.edit_text(text)
+    except Exception:
+        await status_msg.edit_text("Not received yet" if lang == 'en' else "暂未收到")
+
+
+async def bd_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /bd 命令 - 手动补单：/bd <UTR> <订单号>"""
+    user = update.effective_user
+    chat = update.effective_chat
+    lang = get_language(user.id)
+    
+    # 参数校验
+    if not context.args or len(context.args) < 2:
+        if lang == 'en':
+            await update.message.reply_text(
+                "Usage: /bd <UTR> <order_no>\n\n"
+                "Example: /bd 566885730682 630777561987"
+            )
+        else:
+            await update.message.reply_text(
+                "用法：/bd <UTR> <订单号>\n\n"
+                "示例：/bd 566885730682 630777561987"
+            )
+        return
+    
+    utr = context.args[0].strip()
+    order_no = context.args[1].strip()
+    
+    # 获取绑定的商户
+    merchant_service = MerchantService()
+    merchant = await merchant_service.get_by_telegram_id(chat.id)
+    if not merchant:
+        if lang == 'en':
+            await update.message.reply_text("❌ This chat is not bound yet. Please /bind merchant code first")
+        else:
+            await update.message.reply_text("❌ 当前聊天尚未绑定商户，请先 /bind 商户号")
+        return
+    
+    # 提示处理中
+    status_msg = await update.message.reply_text("🔄 Confirming order, please wait..." if lang == 'en' else "🔄 正在补单，请稍候...")
+    
+    try:
+        from app.utils.api_client import api_client
+        # 显式超时保护，避免后端挂起导致会话长时间等待
+        result = await asyncio.wait_for(
+            api_client.confirm_utr(merchant.merchant_code, utr, order_no),
+            timeout=settings.BACKEND_API_TIMEOUT
+        )
+        msg_text = result.get("msg", ("Not received yet" if lang == 'en' else "暂未收到"))
+        await status_msg.edit_text(msg_text)
+    except asyncio.TimeoutError:
+        await status_msg.edit_text("Not received yet" if lang == 'en' else "暂未收到")
     except Exception:
         await status_msg.edit_text("Not received yet" if lang == 'en' else "暂未收到")
 
