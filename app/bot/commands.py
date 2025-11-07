@@ -286,19 +286,60 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"💰 Balance Query\n\n"
                         f"🏪 Merchant: {merchant.merchant_name}\n"
                         f"📊 Status: {'✅ Active' if merchant.is_active else '❌ Frozen'}\n\n"
-                        f"💵 Available: ₹{use_balance}\n"
-                        f"🔒 Frozen: ₹{frozen_balance}\n"
-                        f"💎 Total: ₹{balance}\n"
+                        f"💵 Available: ₹{use_balance} | 🔒 Frozen: ₹{frozen_balance} | 💎 Total: ₹{balance}\n"
                     )
                 else:
                     balance_text = (
                         f"💰 余额查询\n\n"
                         f"🏪 商户：{merchant.merchant_name}\n"
                         f"📊 账户状态：{'✅ 正常' if merchant.is_active else '❌ 已冻结'}\n\n"
-                        f"💵 可用余额：₹{use_balance}\n"
-                        f"🔒 冻结金额：₹{frozen_balance}\n"
-                f"💎 总余额：₹{balance}\n"
+                        f"💵 可用余额：₹{use_balance} | 🔒 冻结金额：₹{frozen_balance} | 💎 总余额：₹{balance}\n"
                     )
+                
+                # ======== 附加：今日统计（严格按接口字段） ========
+                def to_int(v):
+                    try:
+                        return int(float(v))
+                    except Exception:
+                        return None
+                def to_float(v):
+                    try:
+                        return float(v)
+                    except Exception:
+                        return None
+                def fmt_count(v):
+                    return str(to_int(v)) if to_int(v) is not None else "—"
+                def fmt_amount(v):
+                    return f"₹{to_float(v):,.2f}" if to_float(v) is not None else "—"
+                def fmt_rate(v):
+                    return str(v) if v is not None else "—"
+
+                # Payin (入款/充值)
+                r_total_s = fmt_count(result.get('today_payin_total'))
+                r_success_s = fmt_count(result.get('today_payin_count'))
+                r_amount_s = fmt_amount(result.get('today_payin_amount'))
+                r_rate_s = fmt_rate(result.get('today_payin_success_rate'))
+
+                # Payout (出款/提现)
+                w_total_s = fmt_count(result.get('today_payout_total'))
+                w_success_s = fmt_count(result.get('today_payout_count'))
+                w_amount_s = fmt_amount(result.get('today_payout_amount'))
+                w_rate_s = fmt_rate(result.get('today_payout_success_rate'))
+                
+                if lang == "en":
+                    stats_text = (
+                        "\n📅 Today's Stats\n\n"
+                        f"• Payin: Total {r_total_s} | Success {r_success_s} | Amount {r_amount_s} | Success Rate {r_rate_s}\n"
+                        f"• Payout: Total {w_total_s} | Success {w_success_s} | Amount {w_amount_s} | Success Rate {w_rate_s}\n"
+                    )
+                else:
+                    stats_text = (
+                        "\n📅 今日统计\n\n"
+                        f"• 入款：总笔数 {r_total_s} | 成功 {r_success_s} | 金额 {r_amount_s} | 成功率 {r_rate_s}\n"
+                        f"• 出款：总笔数 {w_total_s} | 成功 {w_success_s} | 金额 {w_amount_s} | 成功率 {w_rate_s}\n"
+                    )
+                
+                balance_text += stats_text
                 
                 await update.message.reply_text(balance_text)
             else:
