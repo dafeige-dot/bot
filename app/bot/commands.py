@@ -210,10 +210,19 @@ async def upi_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         from app.utils.api_client import api_client
         result = await api_client.check_upi(merchant.merchant_code, upi)
-        
-        # 接口成功且可识别
-        if isinstance(result, dict) and result.get("code") == 200 and isinstance(result.get("is_upi"), int):
-            is_upi = 1 if result.get("is_upi") == 1 else 0
+
+        # 正确解析：code 可能是字符串；is_upi 位于 data 中
+        ok = isinstance(result, dict) and str(result.get("code")) == "200"
+        data_section = result.get("data") if isinstance(result.get("data"), dict) else {}
+        raw_is_upi = data_section.get("is_upi", result.get("is_upi"))
+        is_upi = None
+        try:
+            if raw_is_upi is not None:
+                is_upi = 1 if int(raw_is_upi) == 1 else 0
+        except Exception:
+            is_upi = None
+
+        if ok and is_upi is not None:
             if is_upi == 1:
                 if lang == 'en':
                     text = (

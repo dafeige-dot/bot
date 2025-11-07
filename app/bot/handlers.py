@@ -399,9 +399,18 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
         
         payment_text += "\n" + "="*30 + "\n\n"
         
-        # 处理 UPI 查询结果（容错）
-        if isinstance(result, dict) and result.get("code") == 200 and isinstance(result.get("is_upi"), int):
-            is_upi = 1 if result.get("is_upi") == 1 else 0
+        # 处理 UPI 查询结果（容错，兼容 code 为字符串，且 is_upi 位于 data 中）
+        ok = isinstance(result, dict) and str(result.get("code")) == "200"
+        data_section = result.get("data") if isinstance(result.get("data"), dict) else {}
+        raw_is_upi = data_section.get("is_upi", result.get("is_upi"))
+        is_upi = None
+        try:
+            if raw_is_upi is not None:
+                is_upi = 1 if int(raw_is_upi) == 1 else 0
+        except Exception:
+            is_upi = None
+
+        if ok and is_upi is not None:
             if is_upi == 1:
                 if lang == 'en':
                     payment_text += "✅ This is our UPI address\n\n"
@@ -446,7 +455,7 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
             payment_text += ("Not received yet" if lang == 'en' else "暂未收到")
         
         await processing_msg.edit_text(payment_text)
-        logger.info(f"UPI 查询完成: is_upi={result.get('is_upi', 'N/A')}")
+        logger.info(f"UPI 查询完成: is_upi={is_upi if is_upi is not None else 'N/A'}")
         
     except Exception:
         await processing_msg.edit_text("Not received yet" if lang == 'en' else "暂未收到")
