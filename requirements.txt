@@ -17,9 +17,6 @@ alembic==1.13.0
 # Redis (celery[redis] 会自动安装兼容版本的 redis 包，无需单独指定)
 hiredis==2.2.3
 
-# Celery (异步任务)
-celery[redis]==5.3.4
-
 # OCR（Docker/Linux 默认不安装 PaddleOCR，避免 PyMuPDF 冲突）
 # 如需在 Windows 本机启用，请取消下行注释中的平台条件
 paddleocr==2.7.0.3; sys_platform == 'win32' and python_version < '3.11'

@@ -65,67 +65,7 @@ services:
     networks:
       - bot_network
 
-  # Celery Worker (异步任务)
-  celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: merchant_bot_celery
-    env_file:
-      - .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./app:/app/app
-      - ./logs:/app/logs
-      - ./uploads:/app/uploads
-      - ./temp:/app/temp
-    command: celery -A app.tasks.celery_tasks worker --loglevel=info --concurrency=4
-    restart: unless-stopped
-    networks:
-      - bot_network
-
-  # Celery Beat (定时任务调度)
-  celery_beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: merchant_bot_celery_beat
-    env_file:
-      - .env
-    depends_on:
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./app:/app/app
-      - ./logs:/app/logs
-    command: celery -A app.tasks.celery_tasks beat --loglevel=info
-    restart: unless-stopped
-    networks:
-      - bot_network
-
-  # Flower (Celery监控，可选)
-  flower:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: merchant_bot_flower
-    env_file:
-      - .env
-    depends_on:
-      redis:
-        condition: service_healthy
-    ports:
-      - "5555:5555"
-    command: celery -A app.tasks.celery_tasks flower --port=5555
-    restart: unless-stopped
-    networks:
-      - bot_network
-
-  # FastAPI 管理后台 (可选)
+   # FastAPI 管理后台 (可选)
   api:
     build:
       context: .
