@@ -95,27 +95,41 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # 发送处理中消息
-    if lang == 'en':
-        processing_msg = await update.message.reply_text("🔄 Processing image, please wait...")
-    else:
-        processing_msg = await update.message.reply_text("🔄 正在处理图片，请稍候...")
+    try:
+        if lang == 'en':
+            processing_msg = await update.message.reply_text("🔄 Processing image, please wait...")
+        else:
+            processing_msg = await update.message.reply_text("🔄 正在处理图片，请稍候...")
+    except Exception as e:
+        logger.error(f"发送处理消息失败: {e}")
+        return  # 如果连消息都发不出去，直接返回
     
     try:
-        # 下载图片
-        file = await context.bot.get_file(photo.file_id)
+        # 下载图片（30秒超时）
+        import asyncio
+        file = await asyncio.wait_for(
+            context.bot.get_file(photo.file_id),
+            timeout=30.0
+        )
         
         # 保存路径
         file_ext = Path(file.file_path).suffix or ".jpg"
         file_name = f"{user.id}_{photo.file_id}{file_ext}"
         file_path = Path(settings.TEMP_DIR) / file_name
         
-        await file.download_to_drive(file_path)
+        await asyncio.wait_for(
+            file.download_to_drive(file_path),
+            timeout=30.0
+        )
         
         logger.info(f"图片已下载: {file_path}")
         
-        # 进行OCR识别
+        # 进行OCR识别（60秒超时）
         ocr_service = OCRService()
-        ocr_result = await ocr_service.recognize_order_image(str(file_path))
+        ocr_result = await asyncio.wait_for(
+            ocr_service.recognize_order_image(str(file_path)),
+            timeout=60.0
+        )
         
         # 删除临时文件
         if file_path.exists():
@@ -312,18 +326,54 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         logger.info(f"OCR识别成功，找到 {len(found_results)} 个订单")
         
+    except asyncio.TimeoutError:
+        logger.error("图片处理超时")
+        try:
+            if lang == 'en':
+                await processing_msg.edit_text(
+                    f"⏱️ Processing timeout\n\n"
+                    f"Image processing took too long, please try:\n"
+                    f"• Upload a smaller or clearer image\n"
+                    f"• Try again later"
+                )
+            else:
+                await processing_msg.edit_text(
+                    f"⏱️ 处理超时\n\n"
+                    f"图片处理时间过长，请尝试：\n"
+                    f"• 上传更小或更清晰的图片\n"
+                    f"• 稍后重试"
+                )
+        except Exception as e2:
+            logger.error(f"发送超时消息失败: {e2}")
+        finally:
+            # 清理临时文件
+            try:
+                if 'file_path' in locals() and file_path.exists():
+                    os.remove(file_path)
+            except Exception:
+                pass
     except Exception as e:
         logger.exception(f"处理图片时出错: {e}")
-        if lang == 'en':
-            await processing_msg.edit_text(
-                f"❌ Processing failed\n\n"
-                f"An error occurred, please try again later."
-            )
-        else:
-            await processing_msg.edit_text(
-                f"❌ 处理失败\n\n"
-                f"发生了一些错误，请稍后重试。"
-            )
+        try:
+            if lang == 'en':
+                await processing_msg.edit_text(
+                    f"❌ Processing failed\n\n"
+                    f"An error occurred, please try again later."
+                )
+            else:
+                await processing_msg.edit_text(
+                    f"❌ 处理失败\n\n"
+                    f"发生了一些错误，请稍后重试。"
+                )
+        except Exception as e2:
+            logger.error(f"发送错误消息失败: {e2}")
+        finally:
+            # 清理临时文件
+            try:
+                if 'file_path' in locals() and file_path.exists():
+                    os.remove(file_path)
+            except Exception:
+                pass
 
 
 async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
@@ -668,15 +718,50 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """错误处理器"""
-    logger.error(f"更新 {update} 导致错误: {context.error}", exc_info=context.error)
+    import traceback
+    from telegram.error import TimedOut, NetworkError, TelegramError
     
-    # 如果有update对象，尝试通知用户
+    error = context.error
+    
+    # 记录错误详情
+    if isinstance(error, TimedOut):
+        logger.warning(f"Telegram API 超时: {update}")
+    elif isinstance(error, NetworkError):
+        logger.error(f"网络错误: {error}", exc_info=error)
+    else:
+        logger.error(f"更新 {update} 导致错误: {error}", exc_info=error)
+    
+    # 如果有update对象，尝试通知用户（但不要因为通知失败而崩溃）
     if isinstance(update, Update) and update.effective_message:
         try:
-            await update.effective_message.reply_text(
-                "❌ 抱歉，处理您的请求时发生了错误。\n"
-                "我们已记录此问题，请稍后重试。"
+            # 获取用户语言
+            lang = 'zh'
+            if update.effective_user:
+                lang_code = getattr(update.effective_user, 'language_code', '')
+                if lang_code and lang_code.startswith('en'):
+                    lang = 'en'
+            
+            if lang == 'en':
+                error_msg = (
+                    "❌ Sorry, an error occurred while processing your request.\n"
+                    "The issue has been logged. Please try again later."
+                )
+            else:
+                error_msg = (
+                    "❌ 抱歉，处理您的请求时发生了错误。\n"
+                    "我们已记录此问题，请稍后重试。"
+                )
+            
+            # 使用asyncio超时保护
+            import asyncio
+            await asyncio.wait_for(
+                update.effective_message.reply_text(error_msg),
+                timeout=10.0
             )
+        except asyncio.TimeoutError:
+            logger.error("发送错误消息超时")
+        except TelegramError as e:
+            logger.error(f"发送错误消息失败 (TelegramError): {e}")
         except Exception as e:
             logger.error(f"发送错误消息失败: {e}")
 

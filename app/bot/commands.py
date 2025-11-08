@@ -318,12 +318,19 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not merchant:
             msg = get_text("not_registered", lang)
-            await update.message.reply_text(msg)
+            try:
+                await update.message.reply_text(msg)
+            except Exception as e:
+                logger.error(f"发送未绑定消息失败: {e}")
             return
         
         # 发送查询中提示
         loading_msg = get_text("querying", lang) if lang == "en" else "⏳ 查询中，请稍候..."
-        status_message = await update.message.reply_text(loading_msg)
+        try:
+            status_message = await update.message.reply_text(loading_msg)
+        except Exception as e:
+            logger.error(f"发送查询提示消息失败: {e}")
+            return  # 如果连提示消息都发不出去，直接返回
         
         try:
             # 调用后端 API 查询余额
@@ -402,7 +409,10 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 balance_text += stats_text
                 
-                await update.message.reply_text(balance_text)
+                try:
+                    await update.message.reply_text(balance_text)
+                except Exception as e:
+                    logger.error(f"发送余额信息失败: {e}")
             else:
                 error_msg = result.get("msg", "Unknown error")
                 error_code = result.get("code", 500)
@@ -418,7 +428,10 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         error_text += f"Error: {error_msg}"
                     
-                    await update.message.reply_text(error_text)
+                    try:
+                        await update.message.reply_text(error_text)
+                    except Exception as e:
+                        logger.error(f"发送错误信息失败: {e}")
                 else:
                     error_text = f"❌ 查询失败\n\n"
                     if error_code == 503:
@@ -430,7 +443,10 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         error_text += f"错误信息：{error_msg}"
                     
-                    await update.message.reply_text(error_text)
+                    try:
+                        await update.message.reply_text(error_text)
+                    except Exception as e:
+                        logger.error(f"发送错误信息失败: {e}")
                     
         except Exception as api_error:
             logger.exception(f"余额查询 API 调用失败: {api_error}")
@@ -442,18 +458,21 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             
             # 发送友好的错误消息
-            if lang == "en":
-                await update.message.reply_text(
-                    "❌ Query failed\n\n"
-                    "System error occurred\n"
-                    "Please try again later or contact administrator"
-                )
-            else:
-                await update.message.reply_text(
-                    "❌ 查询失败\n\n"
-                    "系统发生错误\n"
-                    "请稍后重试或联系管理员"
-                )
+            try:
+                if lang == "en":
+                    await update.message.reply_text(
+                        "❌ Query failed\n\n"
+                        "System error occurred\n"
+                        "Please try again later or contact administrator"
+                    )
+                else:
+                    await update.message.reply_text(
+                        "❌ 查询失败\n\n"
+                        "系统发生错误\n"
+                        "请稍后重试或联系管理员"
+                    )
+            except Exception as e:
+                logger.error(f"发送系统错误消息失败: {e}")
                 
     except Exception as e:
         logger.exception(f"处理 /balance 命令时发生错误: {e}")
