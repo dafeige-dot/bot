@@ -48,6 +48,11 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"收到用户 {user.id} 的图片")
     
+    # 检查是否在等待广播消息（优先处理）
+    if context.user_data.get("awaiting_broadcast"):
+        await handle_broadcast_photo(update, context)
+        return
+    
     # 获取商户信息（使用聊天ID）
     merchant_service = MerchantService()
     merchant = await merchant_service.get_by_telegram_id(chat.id)
@@ -679,6 +684,8 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
     
     # 执行广播
     broadcast_message = context.user_data.get("broadcast_message", "")
+    broadcast_photo_file_id = context.user_data.get("broadcast_photo_file_id")
+    broadcast_caption = context.user_data.get("broadcast_caption", "")
     context.user_data.clear()
     
     processing_msg = await update.message.reply_text("⏳ 正在发送广播消息...")
@@ -692,10 +699,20 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
         
         for merchant in merchants:
             try:
-                await context.bot.send_message(
-                    chat_id=merchant.telegram_id,
-                    text=f"📢 系统广播\n\n{broadcast_message}"
-                )
+                # 如果有图片，发送图片+说明
+                if broadcast_photo_file_id:
+                    caption_text = f"📢 系统广播\n\n{broadcast_caption}" if broadcast_caption else "📢 系统广播"
+                    await context.bot.send_photo(
+                        chat_id=merchant.telegram_id,
+                        photo=broadcast_photo_file_id,
+                        caption=caption_text
+                    )
+                else:
+                    # 否则发送纯文本消息
+                    await context.bot.send_message(
+                        chat_id=merchant.telegram_id,
+                        text=f"📢 系统广播\n\n{broadcast_message}"
+                    )
                 success_count += 1
                 
                 # 延迟避免限流
@@ -720,6 +737,61 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
             f"❌ 广播发送失败\n\n"
             f"错误信息：{str(e)}"
         )
+
+
+async def handle_broadcast_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理广播图片消息"""
+    from app.config import settings
+    from app.services.merchant import MerchantService
+    
+    user = update.effective_user
+    
+    # 再次检查权限
+    if not settings.is_admin(user.id):
+        await update.message.reply_text("❌ 您没有权限使用此功能")
+        context.user_data.pop("awaiting_broadcast", None)
+        return
+    
+    # 获取图片和说明文字
+    photo = update.message.photo[-1]  # 获取最大的图片
+    caption = update.message.caption if update.message.caption else ""
+    
+    # 确认发送
+    if not context.user_data.get("broadcast_confirmed"):
+        # 保存图片信息
+        context.user_data["broadcast_photo_file_id"] = photo.file_id
+        context.user_data["broadcast_caption"] = caption
+        context.user_data["broadcast_confirmed"] = True
+        
+        # 获取商户数量
+        merchant_service = MerchantService()
+        merchants = await merchant_service.get_all_active_merchants()
+        
+        # 显示预览（转发图片）
+        preview_text = (
+            f"📢 广播图片消息预览：\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📸 图片 + 说明文字\n"
+        )
+        if caption:
+            preview_text += f"💬 说明：{caption}\n"
+        preview_text += (
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"📊 将发送给 {len(merchants)} 个商户\n\n"
+            f"确认发送吗？\n"
+            f"• 回复 '确认' 开始发送\n"
+            f"• 回复 '取消' 或 /cancel 取消"
+        )
+        
+        await update.message.reply_text(preview_text)
+        return
+    
+    # 如果已确认，检查是否是确认消息（这种情况不应该发生，因为这是photo_handler）
+    # 正常流程是：发图片 -> 预览 -> 发文字"确认" -> handle_broadcast_message处理
+    # 所以这里只处理第一次发送图片的情况
+    await update.message.reply_text(
+        "⚠️ 请回复文字 '确认' 来发送广播，或回复 '取消' 来取消"
+    )
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
