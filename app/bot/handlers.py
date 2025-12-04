@@ -73,16 +73,8 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 检查当前会话的OCR功能是否启用
     if not merchant.enable_ocr:
-        if lang == 'en':
-            await update.message.reply_text(
-                "❌ Image recognition is disabled for this chat\n\n"
-                "💡 Admin can enable it with: /toggle_ocr on"
-            )
-        else:
-            await update.message.reply_text(
-                "❌ 当前会话已关闭图片识别功能\n\n"
-                "💡 管理员可使用命令开启：/toggle_ocr on"
-            )
+        # 静默忽略，不发送提示信息
+        logger.info(f"会话 {chat.id} 已关闭OCR，忽略图片")
         return
     
     # 🆕 检查图片是否带有文字说明（caption）
