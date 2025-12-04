@@ -56,6 +56,9 @@ class Merchant(Base):
     timezone = Column(String(50), default="Asia/Shanghai", nullable=False, comment="时区")
     notes = Column(Text, nullable=True, comment="备注")
     
+    # 功能开关（会话级别）
+    enable_ocr = Column(Boolean, default=True, nullable=False, comment="是否启用OCR图片识别")
+    
     # 时间戳
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="创建时间")
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False, comment="更新时间")

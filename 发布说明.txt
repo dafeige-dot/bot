@@ -10,3 +10,7 @@ Bot/Celery 不带热重载，需重启对应容器。
 docker compose build
 docker compose up -d
 FastAPI api 容器带 --reload，代码改动可自动重载；其余容器需重启。
+
+如果是Docker部署
+docker compose down
+docker compose up -d --build

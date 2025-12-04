@@ -81,6 +81,7 @@ def setup_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("gb", commands.broadcast_command))
     application.add_handler(CommandHandler("stats", commands.stats_command))
     application.add_handler(CommandHandler("merchants", commands.merchants_command))
+    application.add_handler(CommandHandler("toggle_ocr", commands.toggle_ocr_command))
     
     # 回调查询处理器
     application.add_handler(CallbackQueryHandler(callbacks.button_callback))
