@@ -927,6 +927,90 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_broadcast"] = True
 
 
+async def broadcast_channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /broadcast_channel 命令（管理员）- 向指定频道发送广播"""
+    user = update.effective_user
+    
+    if not settings.is_admin(user.id):
+        await update.message.reply_text("❌ 您没有权限使用此命令")
+        return
+    
+    # 检查是否提供了频道ID
+    if not context.args or len(context.args) < 1:
+        help_text = (
+            "📢 频道广播功能\n\n"
+            "🔹 使用方法：\n"
+            "/broadcast_channel <频道ID>\n\n"
+            "📝 示例：\n"
+            "/broadcast_channel @mychannel\n"
+            "/broadcast_channel -1001234567890\n\n"
+            "然后在下一条消息中输入要发送的内容。\n\n"
+            "支持的格式：\n"
+            "• 文字消息\n"
+            "• 图片（带文字说明）\n"
+            "• 链接\n\n"
+            "❓ 如何获取频道ID：\n"
+            "1️⃣ 公开频道：直接使用 @频道用户名\n"
+            "2️⃣ 私有频道/群组：\n"
+            "   • 在频道/群组中发送 /get_chat_id\n"
+            "   • Bot会显示该聊天的数字ID\n"
+            "   • 复制ID用于广播命令\n\n"
+            "💡 提示：\n"
+            "• Bot必须是频道管理员才能发送消息\n"
+            "• 发送 /cancel 可以取消广播"
+        )
+        await update.message.reply_text(help_text)
+        return
+    
+    channel_id = context.args[0]
+    
+    # 验证频道ID格式
+    if not (channel_id.startswith('@') or channel_id.startswith('-') or channel_id.isdigit()):
+        await update.message.reply_text(
+            "❌ 频道ID格式错误\n\n"
+            "正确格式：\n"
+            "• @channelname（公开频道）\n"
+            "• -1001234567890（私有频道数字ID）"
+        )
+        return
+    
+    # 尝试获取频道信息以验证Bot权限
+    try:
+        chat = await context.bot.get_chat(channel_id)
+        
+        # 检查Bot是否是管理员
+        bot_member = await context.bot.get_chat_member(channel_id, context.bot.id)
+        if bot_member.status not in ['administrator', 'creator']:
+            await update.message.reply_text(
+                f"❌ Bot在频道 {chat.title} 中没有管理员权限\n\n"
+                f"请先将Bot添加为频道管理员，并授予发送消息的权限。"
+            )
+            return
+        
+        # 保存频道信息
+        context.user_data["awaiting_broadcast_channel"] = True
+        context.user_data["broadcast_channel_id"] = channel_id
+        context.user_data["broadcast_channel_title"] = chat.title
+        
+        await update.message.reply_text(
+            f"✅ 频道验证成功\n\n"
+            f"📢 目标频道：{chat.title}\n"
+            f"🆔 频道ID：{channel_id}\n\n"
+            f"请发送要广播的内容（文字或图片）："
+        )
+        
+    except Exception as e:
+        logger.error(f"验证频道失败: {e}")
+        await update.message.reply_text(
+            f"❌ 无法访问频道 {channel_id}\n\n"
+            f"可能的原因：\n"
+            f"• 频道ID错误\n"
+            f"• Bot未被添加到频道\n"
+            f"• Bot没有足够的权限\n\n"
+            f"错误信息：{str(e)}"
+        )
+
+
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /stats 命令（管理员）"""
     user = update.effective_user
@@ -1044,3 +1128,47 @@ async def toggle_ocr_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"请稍后重试或联系管理员"
         )
 
+
+async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """获取当前聊天的ID（用于频道广播等功能）"""
+    chat = update.effective_chat
+    user = update.effective_user
+    
+    # 判断聊天类型
+    chat_type_map = {
+        'private': '👤 私聊',
+        'group': '👥 群组',
+        'supergroup': '👥 超级群组',
+        'channel': '📢 频道'
+    }
+    
+    chat_type = chat_type_map.get(chat.type, chat.type)
+    
+    # 构建响应消息
+    response = (
+        f"📋 聊天信息\n\n"
+        f"🏷️ 名称：{chat.title if chat.title else user.first_name}\n"
+        f"📍 类型：{chat_type}\n"
+        f"🆔 Chat ID：<code>{chat.id}</code>\n"
+    )
+    
+    # 如果是频道，添加额外说明
+    if chat.type == 'channel':
+        response += (
+            f"\n💡 使用此ID发送频道广播：\n"
+            f"<code>/broadcast_channel {chat.id}</code>\n\n"
+            f"⚠️ 注意：Bot必须是频道管理员"
+        )
+    elif chat.type in ['group', 'supergroup']:
+        response += (
+            f"\n💡 使用此ID发送群组广播：\n"
+            f"<code>/broadcast_channel {chat.id}</code>\n\n"
+            f"⚠️ 注意：Bot必须在群组中且有发送消息权限"
+        )
+    
+    # 如果有username，也显示
+    if chat.username:
+        response += f"\n🔗 Username：@{chat.username}\n"
+        response += f"💡 也可以使用：<code>/broadcast_channel @{chat.username}</code>"
+    
+    await update.message.reply_text(response, parse_mode='HTML')

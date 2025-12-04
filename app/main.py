@@ -79,6 +79,12 @@ def setup_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("broadcast", commands.broadcast_command))
     # 广播别名
     application.add_handler(CommandHandler("gb", commands.broadcast_command))
+    application.add_handler(CommandHandler("broadcast_channel", commands.broadcast_channel_command))
+    # 频道广播别名
+    application.add_handler(CommandHandler("gbc", commands.broadcast_channel_command))
+    application.add_handler(CommandHandler("get_chat_id", commands.get_chat_id_command))
+    # 获取聊天ID别名
+    application.add_handler(CommandHandler("chatid", commands.get_chat_id_command))
     application.add_handler(CommandHandler("stats", commands.stats_command))
     application.add_handler(CommandHandler("merchants", commands.merchants_command))
     application.add_handler(CommandHandler("toggle_ocr", commands.toggle_ocr_command))

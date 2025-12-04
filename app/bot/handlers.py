@@ -37,6 +37,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_broadcast_message(update, context, text)
         return
     
+    # 检查是否在等待频道广播消息
+    if context.user_data.get("awaiting_broadcast_channel"):
+        await handle_broadcast_channel_message(update, context, text)
+        return
+    
     # 普通文本消息不再回复（仅处理命令与图片）
     return
 
@@ -51,6 +56,11 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 检查是否在等待广播消息（优先处理）
     if context.user_data.get("awaiting_broadcast"):
         await handle_broadcast_photo(update, context)
+        return
+    
+    # 检查是否在等待频道广播消息
+    if context.user_data.get("awaiting_broadcast_channel"):
+        await handle_broadcast_channel_photo(update, context)
         return
     
     # 获取商户信息（使用聊天ID）
@@ -791,6 +801,147 @@ async def handle_broadcast_photo(update: Update, context: ContextTypes.DEFAULT_T
     # 所以这里只处理第一次发送图片的情况
     await update.message.reply_text(
         "⚠️ 请回复文字 '确认' 来发送广播，或回复 '取消' 来取消"
+    )
+
+
+async def handle_broadcast_channel_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """处理频道广播文本消息"""
+    from app.config import settings
+    
+    user = update.effective_user
+    
+    # 再次检查权限
+    if not settings.is_admin(user.id):
+        await update.message.reply_text("❌ 您没有权限使用此功能")
+        context.user_data.pop("awaiting_broadcast_channel", None)
+        return
+    
+    channel_id = context.user_data.get("broadcast_channel_id")
+    channel_title = context.user_data.get("broadcast_channel_title", "未知频道")
+    
+    if not channel_id:
+        await update.message.reply_text("❌ 频道信息丢失，请重新使用 /broadcast_channel 命令")
+        context.user_data.clear()
+        return
+    
+    # 确认发送
+    if not context.user_data.get("broadcast_channel_confirmed"):
+        context.user_data["broadcast_channel_message"] = text
+        context.user_data["broadcast_channel_confirmed"] = True
+        
+        await update.message.reply_text(
+            f"📢 频道广播消息预览：\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"{text}\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"📢 目标频道：{channel_title}\n"
+            f"🆔 频道ID：{channel_id}\n\n"
+            f"确认发送吗？\n"
+            f"• 回复 '确认' 开始发送\n"
+            f"• 回复 '取消' 或 /cancel 取消"
+        )
+        return
+    
+    # 检查确认
+    if text.lower() not in ['确认', 'yes', 'y', '是']:
+        context.user_data.clear()
+        await update.message.reply_text("❌ 频道广播已取消")
+        return
+    
+    # 执行频道广播
+    broadcast_message = context.user_data.get("broadcast_channel_message", "")
+    broadcast_photo_file_id = context.user_data.get("broadcast_channel_photo_file_id")
+    broadcast_caption = context.user_data.get("broadcast_channel_caption", "")
+    context.user_data.clear()
+    
+    processing_msg = await update.message.reply_text("⏳ 正在发送到频道...")
+    
+    try:
+        # 如果有图片，发送图片+说明
+        if broadcast_photo_file_id:
+            await context.bot.send_photo(
+                chat_id=channel_id,
+                photo=broadcast_photo_file_id,
+                caption=broadcast_caption if broadcast_caption else None
+            )
+        else:
+            # 否则发送纯文本消息
+            await context.bot.send_message(
+                chat_id=channel_id,
+                text=broadcast_message
+            )
+        
+        await processing_msg.edit_text(
+            f"✅ 消息已成功发送到频道！\n\n"
+            f"📢 频道：{channel_title}\n"
+            f"🆔 ID：{channel_id}"
+        )
+        
+    except Exception as e:
+        logger.exception(f"频道广播发送失败: {e}")
+        await processing_msg.edit_text(
+            f"❌ 发送到频道失败\n\n"
+            f"错误信息：{str(e)}\n\n"
+            f"请检查：\n"
+            f"• Bot是否仍是频道管理员\n"
+            f"• Bot是否有发送消息权限"
+        )
+
+
+async def handle_broadcast_channel_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理频道广播图片消息"""
+    from app.config import settings
+    
+    user = update.effective_user
+    
+    # 再次检查权限
+    if not settings.is_admin(user.id):
+        await update.message.reply_text("❌ 您没有权限使用此功能")
+        context.user_data.pop("awaiting_broadcast_channel", None)
+        return
+    
+    channel_id = context.user_data.get("broadcast_channel_id")
+    channel_title = context.user_data.get("broadcast_channel_title", "未知频道")
+    
+    if not channel_id:
+        await update.message.reply_text("❌ 频道信息丢失，请重新使用 /broadcast_channel 命令")
+        context.user_data.clear()
+        return
+    
+    # 获取图片和说明文字
+    photo = update.message.photo[-1]  # 获取最大的图片
+    caption = update.message.caption if update.message.caption else ""
+    
+    # 确认发送
+    if not context.user_data.get("broadcast_channel_confirmed"):
+        # 保存图片信息
+        context.user_data["broadcast_channel_photo_file_id"] = photo.file_id
+        context.user_data["broadcast_channel_caption"] = caption
+        context.user_data["broadcast_channel_confirmed"] = True
+        
+        # 显示预览
+        preview_text = (
+            f"📢 频道广播图片消息预览：\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📸 图片 + 说明文字\n"
+        )
+        if caption:
+            preview_text += f"💬 说明：{caption}\n"
+        preview_text += (
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"📢 目标频道：{channel_title}\n"
+            f"🆔 频道ID：{channel_id}\n\n"
+            f"确认发送吗？\n"
+            f"• 回复 '确认' 开始发送\n"
+            f"• 回复 '取消' 或 /cancel 取消"
+        )
+        
+        await update.message.reply_text(preview_text)
+        return
+    
+    # 如果已确认，提示用户回复文字确认
+    await update.message.reply_text(
+        "⚠️ 请回复文字 '确认' 来发送到频道，或回复 '取消' 来取消"
     )
 
 
