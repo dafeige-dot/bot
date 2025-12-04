@@ -964,78 +964,83 @@ async def merchants_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def toggle_ocr_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理 /toggle_ocr 命令 - 开关当前会话的图片自动识别功能（管理员）"""
-    user = update.effective_user
-    chat = update.effective_chat
-    
-    if not settings.is_admin(user.id):
-        await update.message.reply_text("❌ 您没有权限使用此命令")
-        return
-    
-    # 获取当前会话的商户信息
-    merchant_service = MerchantService()
-    merchant = await merchant_service.get_by_telegram_id(chat.id)
-    
-    if not merchant:
-        await update.message.reply_text(
-            "❌ 当前会话尚未绑定商户\n\n"
-            "请先使用 /bind 命令绑定商户"
-        )
-        return
-    
-    # 获取会话类型
-    chat_type = "私聊" if chat.type == 'private' else f"群聊 ({chat.title or chat.id})"
-    
-    # 检查参数
-    if context.args and len(context.args) >= 1:
-        action = context.args[0].lower()
-        if action in ['on', 'enable', '开启', '启用', 'true', '1']:
-            merchant.enable_ocr = True
-            status_text = "✅ 已开启"
-            status_emoji = "🟢"
-        elif action in ['off', 'disable', '关闭', '禁用', 'false', '0']:
-            merchant.enable_ocr = False
-            status_text = "❌ 已关闭"
-            status_emoji = "🔴"
-        else:
+    try:
+        user = update.effective_user
+        chat = update.effective_chat
+        
+        if not settings.is_admin(user.id):
+            await update.message.reply_text("❌ 您没有权限使用此命令")
+            return
+        
+        # 获取当前会话的商户信息
+        merchant_service = MerchantService()
+        merchant = await merchant_service.get_by_telegram_id(chat.id)
+        
+        if not merchant:
             await update.message.reply_text(
-                "❌ 参数错误\n\n"
-                "用法：\n"
-                "/toggle_ocr on - 开启图片识别\n"
-                "/toggle_ocr off - 关闭图片识别"
+                "❌ 当前会话尚未绑定商户\n\n"
+                "请先使用 /bind 命令绑定商户"
             )
             return
         
-        # 保存到数据库
-        from app.database.session import AsyncSessionLocal
-        async with AsyncSessionLocal() as session:
-            session.add(merchant)
-            await session.commit()
+        # 获取会话类型
+        chat_type = "私聊" if chat.type == 'private' else f"群聊 ({chat.title or chat.id})"
         
+        # 检查参数
+        if context.args and len(context.args) >= 1:
+            action = context.args[0].lower()
+            if action in ['on', 'enable', '开启', '启用', 'true', '1']:
+                enable_ocr = True
+                status_text = "✅ 已开启"
+                status_emoji = "🟢"
+            elif action in ['off', 'disable', '关闭', '禁用', 'false', '0']:
+                enable_ocr = False
+                status_text = "❌ 已关闭"
+                status_emoji = "🔴"
+            else:
+                await update.message.reply_text(
+                    "❌ 参数错误\n\n"
+                    "用法：\n"
+                    "/toggle_ocr on - 开启图片识别\n"
+                    "/toggle_ocr off - 关闭图片识别"
+                )
+                return
+            
+            # 保存到数据库
+            merchant = await merchant_service.update_merchant(merchant.id, enable_ocr=enable_ocr)
+            
+            await update.message.reply_text(
+                f"{status_emoji} 图片自动识别功能 {status_text}\n\n"
+                f"📍 会话类型：{chat_type}\n"
+                f"🆔 会话ID：<code>{chat.id}</code>\n"
+                f"🏪 商户：{merchant.merchant_name}\n\n"
+                f"当前状态：{'🟢 开启' if merchant.enable_ocr else '🔴 关闭'}\n\n"
+                f"💡 提示：此设置仅对当前{'私聊' if chat.type == 'private' else '群聊'}生效",
+                parse_mode='HTML'
+            )
+        else:
+            # 显示当前状态
+            current_status = "🟢 开启" if merchant.enable_ocr else "🔴 关闭"
+            await update.message.reply_text(
+                f"📸 图片自动识别功能\n\n"
+                f"📍 会话类型：{chat_type}\n"
+                f"🆔 会话ID：<code>{chat.id}</code>\n"
+                f"🏪 商户：{merchant.merchant_name}\n\n"
+                f"当前状态：{current_status}\n\n"
+                f"用法：\n"
+                f"/toggle_ocr on - 开启图片识别\n"
+                f"/toggle_ocr off - 关闭图片识别\n\n"
+                f"💡 提示：\n"
+                f"• 此设置仅对当前{'私聊' if chat.type == 'private' else '群聊'}生效\n"
+                f"• 不同会话可以有不同的设置\n"
+                f"• 关闭后发送图片将不会自动识别",
+                parse_mode='HTML'
+            )
+    except Exception as e:
+        logger.error(f"toggle_ocr_command 错误: {e}")
         await update.message.reply_text(
-            f"{status_emoji} 图片自动识别功能 {status_text}\n\n"
-            f"📍 会话类型：{chat_type}\n"
-            f"🆔 会话ID：<code>{chat.id}</code>\n"
-            f"🏪 商户：{merchant.merchant_name}\n\n"
-            f"当前状态：{'🟢 开启' if merchant.enable_ocr else '🔴 关闭'}\n\n"
-            f"💡 提示：此设置仅对当前{'私聊' if chat.type == 'private' else '群聊'}生效",
-            parse_mode='HTML'
-        )
-    else:
-        # 显示当前状态
-        current_status = "🟢 开启" if merchant.enable_ocr else "🔴 关闭"
-        await update.message.reply_text(
-            f"📸 图片自动识别功能\n\n"
-            f"📍 会话类型：{chat_type}\n"
-            f"🆔 会话ID：<code>{chat.id}</code>\n"
-            f"🏪 商户：{merchant.merchant_name}\n\n"
-            f"当前状态：{current_status}\n\n"
-            f"用法：\n"
-            f"/toggle_ocr on - 开启图片识别\n"
-            f"/toggle_ocr off - 关闭图片识别\n\n"
-            f"💡 提示：\n"
-            f"• 此设置仅对当前{'私聊' if chat.type == 'private' else '群聊'}生效\n"
-            f"• 不同会话可以有不同的设置\n"
-            f"• 关闭后发送图片将不会自动识别",
-            parse_mode='HTML'
+            f"❌ 处理命令时出错\n\n"
+            f"错误信息：{str(e)}\n\n"
+            f"请稍后重试或联系管理员"
         )
 
