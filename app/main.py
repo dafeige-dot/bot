@@ -82,6 +82,8 @@ def setup_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("broadcast_channel", commands.broadcast_channel_command))
     # 频道广播别名
     application.add_handler(CommandHandler("gbc", commands.broadcast_channel_command))
+    # 定向群组广播
+    application.add_handler(CommandHandler("dxgb", commands.dxgb_command))
     application.add_handler(CommandHandler("get_chat_id", commands.get_chat_id_command))
     # 获取聊天ID别名
     application.add_handler(CommandHandler("chatid", commands.get_chat_id_command))

@@ -42,6 +42,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_broadcast_channel_message(update, context, text)
         return
     
+    # 检查是否在等待定向群组广播消息
+    if context.user_data.get("awaiting_dxgb_message"):
+        await handle_dxgb_message(update, context, text)
+        return
+    
     # 普通文本消息不再回复（仅处理命令与图片）
     return
 
@@ -61,6 +66,11 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 检查是否在等待频道广播消息
     if context.user_data.get("awaiting_broadcast_channel"):
         await handle_broadcast_channel_photo(update, context)
+        return
+    
+    # 检查是否在等待定向群组广播图片
+    if context.user_data.get("awaiting_dxgb_message"):
+        await handle_dxgb_photo(update, context)
         return
     
     # 获取商户信息（使用聊天ID）
@@ -994,3 +1004,148 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             logger.error(f"发送错误消息失败: {e}")
 
+
+
+async def handle_dxgb_message(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """处理定向群组广播文本消息"""
+    from app.config import settings
+    
+    user = update.effective_user
+    
+    if not settings.is_admin(user.id):
+        await update.message.reply_text("❌ 您没有权限使用此功能")
+        context.user_data.pop("awaiting_dxgb_message", None)
+        return
+    
+    selected = context.user_data.get("dxgb_selected", [])
+    merchants = context.user_data.get("dxgb_merchants", {})
+    
+    if not selected or not merchants:
+        await update.message.reply_text("❌ 会话已过期，请重新使用 /dxgb 命令")
+        context.user_data.clear()
+        return
+    
+    # 确认发送
+    if not context.user_data.get("dxgb_confirmed"):
+        context.user_data["dxgb_message"] = text
+        context.user_data["dxgb_confirmed"] = True
+        
+        selected_names = [merchants[tid] for tid in selected if tid in merchants]
+        await update.message.reply_text(
+            f"📢 定向群组广播预览：\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"{text}\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"📋 目标群组 ({len(selected)}个)：\n"
+            f"{'、'.join(selected_names[:5])}"
+            f"{'...' if len(selected_names) > 5 else ''}\n\n"
+            f"确认发送吗？\n"
+            f"• 回复 '确认' 开始发送\n"
+            f"• 回复 '取消' 或 /cancel 取消"
+        )
+        return
+    
+    # 检查确认
+    if text.lower() not in ['确认', 'yes', 'y', '是']:
+        context.user_data.clear()
+        await update.message.reply_text("❌ 定向广播已取消")
+        return
+    
+    # 执行广播
+    broadcast_message = context.user_data.get("dxgb_message", "")
+    broadcast_photo_file_id = context.user_data.get("dxgb_photo_file_id")
+    broadcast_caption = context.user_data.get("dxgb_caption", "")
+    
+    context.user_data.clear()
+    
+    processing_msg = await update.message.reply_text(f"⏳ 正在发送到 {len(selected)} 个群组...")
+    
+    success_count = 0
+    failed_count = 0
+    failed_groups = []
+    
+    for group_id in selected:
+        try:
+            if broadcast_photo_file_id:
+                await context.bot.send_photo(
+                    chat_id=group_id,
+                    photo=broadcast_photo_file_id,
+                    caption=broadcast_caption if broadcast_caption else None
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=group_id,
+                    text=broadcast_message
+                )
+            success_count += 1
+            
+            # 延迟避免限流
+            if settings.BROADCAST_DELAY_MS > 0:
+                import asyncio
+                await asyncio.sleep(settings.BROADCAST_DELAY_MS / 1000)
+                
+        except Exception as e:
+            logger.error(f"发送到群组 {group_id} 失败: {e}")
+            failed_count += 1
+            group_name = merchants.get(group_id, str(group_id))
+            failed_groups.append(f"{group_name}: {str(e)[:30]}")
+    
+    # 发送结果
+    result_text = (
+        f"✅ 定向广播完成\n\n"
+        f"📊 发送统计：\n"
+        f"• 成功：{success_count} 个群组\n"
+        f"• 失败：{failed_count} 个群组\n"
+    )
+    
+    if failed_groups:
+        result_text += f"\n❌ 失败详情：\n" + "\n".join(failed_groups[:5])
+        if len(failed_groups) > 5:
+            result_text += f"\n... 等 {len(failed_groups)} 个"
+    
+    await processing_msg.edit_text(result_text)
+
+
+async def handle_dxgb_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理定向群组广播图片消息"""
+    from app.config import settings
+    
+    user = update.effective_user
+    
+    if not settings.is_admin(user.id):
+        await update.message.reply_text("❌ 您没有权限使用此功能")
+        context.user_data.pop("awaiting_dxgb_message", None)
+        return
+    
+    selected = context.user_data.get("dxgb_selected", [])
+    merchants = context.user_data.get("dxgb_merchants", {})
+    
+    if not selected or not merchants:
+        await update.message.reply_text("❌ 会话已过期，请重新使用 /dxgb 命令")
+        context.user_data.clear()
+        return
+    
+    # 获取图片
+    photo = update.message.photo[-1]  # 最大尺寸
+    caption = update.message.caption or ""
+    
+    # 确认发送
+    if not context.user_data.get("dxgb_confirmed"):
+        context.user_data["dxgb_photo_file_id"] = photo.file_id
+        context.user_data["dxgb_caption"] = caption
+        context.user_data["dxgb_confirmed"] = True
+        
+        selected_names = [merchants[tid] for tid in selected if tid in merchants]
+        await update.message.reply_text(
+            f"📢 定向群组广播图片预览：\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📸 图片" + (f" + 说明：{caption[:50]}..." if len(caption) > 50 else (f" + 说明：{caption}" if caption else "")) + "\n"
+            f"━━━━━━━━━━━━━━━━━━\n\n"
+            f"📋 目标群组 ({len(selected)}个)：\n"
+            f"{'、'.join(selected_names[:5])}"
+            f"{'...' if len(selected_names) > 5 else ''}\n\n"
+            f"确认发送吗？\n"
+            f"• 回复 '确认' 开始发送\n"
+            f"• 回复 '取消' 或 /cancel 取消"
+        )
+        return

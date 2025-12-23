@@ -22,10 +22,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = update.effective_user
     
-    await query.answer()
-    
     callback_data = query.data
     logger.info(f"用户 {user.id} 点击了按钮: {callback_data}")
+    
+    # 定向群组广播回调（需要特殊处理answer）
+    if callback_data.startswith("dxgb_"):
+        await handle_dxgb_callback(query, context, user)
+        return
+    
+    await query.answer()
     
     # 语言切换
     if callback_data.startswith("lang_"):
@@ -228,3 +233,122 @@ async def handle_cancel(query, context):
     context.user_data.clear()
     await query.edit_message_text("❌ 操作已取消")
 
+
+
+async def handle_dxgb_callback(query, context, user):
+    """处理定向群组广播的回调"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    if not settings.is_admin(user.id):
+        await query.answer("❌ 无权限", show_alert=True)
+        return
+    
+    callback_data = query.data
+    
+    # 取消操作
+    if callback_data == "dxgb_cancel":
+        context.user_data.pop("dxgb_selected", None)
+        context.user_data.pop("dxgb_merchants", None)
+        context.user_data.pop("awaiting_dxgb_message", None)
+        await query.answer("已取消")
+        await query.edit_message_text("❌ 定向广播已取消")
+        return
+    
+    merchants = context.user_data.get("dxgb_merchants", {})
+    selected = context.user_data.get("dxgb_selected", [])
+    
+    if not merchants:
+        await query.answer("❌ 会话已过期，请重新使用 /dxgb 命令", show_alert=True)
+        return
+    
+    # 全选
+    if callback_data == "dxgb_select_all":
+        if len(selected) == len(merchants):
+            # 已全选，则取消全选
+            context.user_data["dxgb_selected"] = []
+            await query.answer("已取消全选")
+        else:
+            context.user_data["dxgb_selected"] = list(merchants.keys())
+            await query.answer("已全选")
+        selected = context.user_data["dxgb_selected"]
+    
+    # 确认发送
+    elif callback_data == "dxgb_confirm":
+        if not selected:
+            await query.answer("❌ 请至少选择一个群组", show_alert=True)
+            return
+        
+        # 进入等待消息状态
+        context.user_data["awaiting_dxgb_message"] = True
+        await query.answer()
+        
+        selected_names = [merchants[tid] for tid in selected if tid in merchants]
+        await query.edit_message_text(
+            f"✅ 已选择 {len(selected)} 个群组：\n\n"
+            f"{'、'.join(selected_names[:5])}"
+            f"{'...' if len(selected_names) > 5 else ''}\n\n"
+            f"📝 请发送要广播的内容（文字或图片）：\n\n"
+            f"💡 发送 /cancel 取消操作"
+        )
+        return
+    
+    # 选择/取消选择单个群组
+    elif callback_data.startswith("dxgb_select_"):
+        try:
+            group_id = int(callback_data.replace("dxgb_select_", ""))
+            if group_id in selected:
+                selected.remove(group_id)
+                await query.answer("已取消选择")
+            else:
+                selected.append(group_id)
+                await query.answer("已选择")
+            context.user_data["dxgb_selected"] = selected
+        except ValueError:
+            await query.answer("❌ 无效的群组ID", show_alert=True)
+            return
+    
+    # 更新按钮显示
+    buttons = []
+    row = []
+    merchant_list = list(merchants.items())
+    for i, (tid, name) in enumerate(merchant_list):
+        display_name = name[:12] + "..." if len(name) > 12 else name
+        # 选中的显示 ✓
+        prefix = "✓ " if tid in selected else "📢 "
+        btn = InlineKeyboardButton(
+            f"{prefix}{display_name}",
+            callback_data=f"dxgb_select_{tid}"
+        )
+        row.append(btn)
+        
+        if len(row) == 2 or i == len(merchant_list) - 1:
+            buttons.append(row)
+            row = []
+    
+    # 添加操作按钮
+    buttons.append([
+        InlineKeyboardButton(
+            "☑️ 取消全选" if len(selected) == len(merchants) else "✅ 全选",
+            callback_data="dxgb_select_all"
+        ),
+        InlineKeyboardButton("❌ 取消", callback_data="dxgb_cancel")
+    ])
+    
+    # 如果有选中的群组，显示确认按钮
+    if selected:
+        buttons.append([
+            InlineKeyboardButton(f"📤 确认发送 ({len(selected)}个群组)", callback_data="dxgb_confirm")
+        ])
+    
+    keyboard = InlineKeyboardMarkup(buttons)
+    
+    await query.edit_message_text(
+        f"📢 定向群组广播\n\n"
+        f"📋 共 {len(merchants)} 个群组，已选择 {len(selected)} 个\n"
+        f"请点击选择要发送广播的群组：\n\n"
+        f"💡 提示：\n"
+        f"• 点击群组名称选择/取消选择\n"
+        f"• 选中的群组会显示 ✓ 标记\n"
+        f"• 选择完成后点击「确认发送」",
+        reply_markup=keyboard
+    )

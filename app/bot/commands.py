@@ -1172,3 +1172,71 @@ async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         response += f"💡 也可以使用：<code>/broadcast_channel @{chat.username}</code>"
     
     await update.message.reply_text(response, parse_mode='HTML')
+
+
+async def dxgb_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /dxgb 命令（管理员）- 定向群组广播"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    user = update.effective_user
+    
+    if not settings.is_admin(user.id):
+        await update.message.reply_text("❌ 您没有权限使用此命令")
+        return
+    
+    # 获取所有已绑定的商户（群组）
+    merchant_service = MerchantService()
+    merchants = await merchant_service.get_all_active_merchants()
+    
+    if not merchants:
+        await update.message.reply_text("❌ 暂无可用的群组/商户")
+        return
+    
+    # 过滤出群组类型的商户（telegram_id 为负数的是群组）
+    group_merchants = [m for m in merchants if m.telegram_id < 0]
+    
+    if not group_merchants:
+        await update.message.reply_text(
+            "❌ 暂无已绑定的群组\n\n"
+            "💡 提示：只有绑定了商户的群组才会显示在列表中"
+        )
+        return
+    
+    # 构建群组选择按钮（每行2个）
+    buttons = []
+    row = []
+    for i, merchant in enumerate(group_merchants):
+        # 显示商户名称，截断过长的名称
+        display_name = merchant.merchant_name[:15] + "..." if len(merchant.merchant_name) > 15 else merchant.merchant_name
+        btn = InlineKeyboardButton(
+            f"📢 {display_name}",
+            callback_data=f"dxgb_select_{merchant.telegram_id}"
+        )
+        row.append(btn)
+        
+        if len(row) == 2 or i == len(group_merchants) - 1:
+            buttons.append(row)
+            row = []
+    
+    # 添加全选和取消按钮
+    buttons.append([
+        InlineKeyboardButton("✅ 全选", callback_data="dxgb_select_all"),
+        InlineKeyboardButton("❌ 取消", callback_data="dxgb_cancel")
+    ])
+    
+    keyboard = InlineKeyboardMarkup(buttons)
+    
+    # 初始化选中列表
+    context.user_data["dxgb_selected"] = []
+    context.user_data["dxgb_merchants"] = {m.telegram_id: m.merchant_name for m in group_merchants}
+    
+    await update.message.reply_text(
+        f"📢 定向群组广播\n\n"
+        f"📋 共找到 {len(group_merchants)} 个群组\n"
+        f"请点击选择要发送广播的群组：\n\n"
+        f"💡 提示：\n"
+        f"• 点击群组名称选择/取消选择\n"
+        f"• 选中的群组会显示 ✓ 标记\n"
+        f"• 选择完成后点击「确认发送」",
+        reply_markup=keyboard
+    )
