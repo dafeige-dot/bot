@@ -349,20 +349,21 @@ async def balance_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 balance = result.get("balance", "0")
                 use_balance = result.get("use_balance", "0")
                 frozen_balance = result.get("frozen_balance", "0")
+                wj_balance = result.get("wj_balance", "0")
                 
                 if lang == "en":
                     balance_text = (
                         f"💰 Balance Query\n\n"
                         f"🏪 Merchant: {merchant.merchant_name}\n"
                         f"📊 Status: {'✅ Active' if merchant.is_active else '❌ Frozen'}\n\n"
-                        f"💵 Available: ₹{use_balance} | 🔒 Frozen: ₹{frozen_balance} | 💎 Total: ₹{balance}\n"
+                        f"💵 Available: ₹{use_balance} | 🔒 Frozen: ₹{frozen_balance} | 🔒 Unsettled: ₹{wj_balance}| 💎 Total: ₹{balance}\n"
                     )
                 else:
                     balance_text = (
                         f"💰 余额查询\n\n"
                         f"🏪 商户：{merchant.merchant_name}\n"
                         f"📊 账户状态：{'✅ 正常' if merchant.is_active else '❌ 已冻结'}\n\n"
-                        f"💵 可用余额：₹{use_balance} | 🔒 冻结金额：₹{frozen_balance} | 💎 总余额：₹{balance}\n"
+                        f"💵 可用余额：₹{use_balance} | 🔒 冻结金额：₹{frozen_balance}| 🔒 未结算金额：₹{wj_balance} | 💎 总余额：₹{balance}\n"
                     )
                 
                 # ======== 附加：今日统计（严格按接口字段） ========
