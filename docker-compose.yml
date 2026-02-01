@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL 数据库
   postgres:
@@ -60,12 +58,12 @@ services:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
       - ./temp:/app/temp
-    command: python app/main.py
+    command: python run.py
     restart: unless-stopped
     networks:
       - bot_network
 
-   # FastAPI 管理后台 (可选)
+  # FastAPI API 服务（定向广播HTTP接口）
   api:
     build:
       context: .
@@ -79,14 +77,20 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     volumes:
       - ./app:/app/app
       - ./logs:/app/logs
-    command: uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload
+    command: python run_api.py
     restart: unless-stopped
     networks:
       - bot_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
   postgres_data:

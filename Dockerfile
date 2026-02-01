@@ -19,6 +19,7 @@ RUN set -eux; \
       libgomp1 \
       libglib2.0-0 libsm6 libxext6 libxrender1 libgl1 \
       tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim \
+      curl \
     ; \
     rm -rf /var/lib/apt/lists/*
 
@@ -35,13 +36,13 @@ RUN mkdir -p /app/logs /app/uploads /app/temp
 # 复制应用代码
 COPY . .
 
-# 暴露端口
+# 暴露端口（Bot不需要端口，API需要8000）
 EXPOSE 8000
 
-# 健康检查
+# 健康检查（默认检查Python进程）
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import sys; sys.exit(0)"
 
-# 默认命令
-CMD ["python", "app/main.py"]
+# 默认命令（启动Bot服务，API服务会在docker-compose中覆盖）
+CMD ["python", "run.py"]
 

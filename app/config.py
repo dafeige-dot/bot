@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     # ===== API配置 =====
     API_HOST: str = Field(default="0.0.0.0", env="API_HOST")
     API_PORT: int = Field(default=8000, env="API_PORT")
+    API_SECRET_KEY: Optional[str] = Field(default=None, env="API_SECRET_KEY")
     
     # ===== 后端API配置 =====
     BACKEND_API_URL: str = Field(default="http://127.0.0.1:60010/httpapi/telegram", env="BACKEND_API_URL")
