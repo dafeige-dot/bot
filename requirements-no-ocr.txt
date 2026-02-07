@@ -14,9 +14,6 @@ asyncpg==0.29.0
 psycopg2-binary==2.9.9
 alembic==1.13.0
 
-# Redis
-hiredis==2.2.3
-
 # 工具库
 python-dotenv==1.0.0
 loguru==0.7.2

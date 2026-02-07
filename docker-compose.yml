@@ -22,24 +22,6 @@ services:
     networks:
       - bot_network
 
-  # Redis 缓存和消息队列
-  redis:
-    image: redis:7-alpine
-    container_name: merchant_bot_redis
-    command: redis-server --appendonly yes --requirepass redis_password_2024
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-    networks:
-      - bot_network
-
   # Telegram Bot 主服务
   bot:
     build:
@@ -50,8 +32,6 @@ services:
       - .env
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     volumes:
       - ./app:/app/app
@@ -74,8 +54,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
@@ -94,8 +72,6 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-  redis_data:
     driver: local
 
 networks:

@@ -32,15 +32,6 @@ class Settings(BaseSettings):
     DATABASE_POOL_SIZE: int = Field(default=20, env="DATABASE_POOL_SIZE")
     DATABASE_MAX_OVERFLOW: int = Field(default=10, env="DATABASE_MAX_OVERFLOW")
     
-    # ===== Redis配置 =====
-    REDIS_URL: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
-    REDIS_PASSWORD: Optional[str] = Field(default=None, env="REDIS_PASSWORD")
-    REDIS_DB: int = Field(default=0, env="REDIS_DB")
-    
-    # ===== Celery配置 =====
-    CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1", env="CELERY_BROKER_URL")
-    CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2", env="CELERY_RESULT_BACKEND")
-    
     # ===== OCR配置 =====
     OCR_ENGINE: str = Field(default="paddleocr", env="OCR_ENGINE")
     PADDLEOCR_USE_GPU: bool = Field(default=False, env="PADDLEOCR_USE_GPU")
