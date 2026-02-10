@@ -128,6 +128,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"  # 忽略未定义的环境变量
     
     def is_admin(self, user_id: int) -> bool:
         """检查用户是否为管理员"""
