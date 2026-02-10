@@ -252,6 +252,7 @@ async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE
             real_pay = result.get("real_pay", "0")
             platform_order_no = result.get("order_num", "")
             mch_order_no = result.get("mch_order_no", "")
+            utr = result.get("utr", "")
             
             # 状态 emoji
             status_emoji = {
@@ -270,6 +271,7 @@ async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE
                     f"💰 Order Amount: ₹{order_price}\n"
                     f"💳 Real Pay: ₹{real_pay}\n"
                     f"📊 Status: {status_desc}\n"
+                    f"📊 Utr: {utr}\n"
                 )
             else:
                 type_text = "代收订单" if order_type == "payin" else "代付订单"
@@ -280,6 +282,7 @@ async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE
                     f"💰 订单金额：₹{order_price}\n"
                     f"💳 实际支付：₹{real_pay}\n"
                     f"📊 状态：{status_desc}\n"
+                    f"📊 Utr：{utr}\n"
                 )
             
             # 如果是失败状态且有错误消息
