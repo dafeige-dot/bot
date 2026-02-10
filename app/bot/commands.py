@@ -145,6 +145,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 实时查看可用余额和冻结金额\n"
         "• 查看最近的交易记录\n\n"
         
+        "📊 成功率查询：\n"
+        "/cgl_15m - 查询最近15分钟成功率\n"
+        "/cgl_1h - 查询最近1小时成功率\n"
+        "/cgl_day - 查询当天成功率\n\n"
+        
         "📸 图片识别：\n"
         "• 支持上传订单截图\n"
         "• 自动识别订单号并查询\n"
@@ -1128,6 +1133,156 @@ async def toggle_ocr_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             f"错误信息：{str(e)}\n\n"
             f"请稍后重试或联系管理员"
         )
+
+
+async def cgl_15m_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /cgl_15m 命令 - 查询最近15分钟的成功率"""
+    await query_success_rate(update, context, "15m")
+
+
+async def cgl_1h_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /cgl_1h 命令 - 查询最近1小时的成功率"""
+    await query_success_rate(update, context, "1h")
+
+
+async def cgl_day_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理 /cgl_day 命令 - 查询当天的成功率"""
+    await query_success_rate(update, context, "d")
+
+
+async def query_success_rate(update: Update, context: ContextTypes.DEFAULT_TYPE, time_range: str):
+    """查询成功率的通用函数"""
+    user = update.effective_user
+    chat = update.effective_chat
+    lang = get_language(user.id)
+    
+    try:
+        # 获取商户信息
+        merchant_service = MerchantService()
+        merchant = await merchant_service.get_by_telegram_id(chat.id)
+        
+        if not merchant:
+            msg = get_text("not_registered", lang)
+            await update.message.reply_text(msg)
+            return
+        
+        # 时间范围显示文本
+        time_range_text = {
+            "15m": "最近15分钟" if lang == "zh" else "Last 15 Minutes",
+            "1h": "最近1小时" if lang == "zh" else "Last 1 Hour",
+            "d": "当天" if lang == "zh" else "Today"
+        }.get(time_range, time_range)
+        
+        # 发送查询中提示
+        if lang == "en":
+            status_message = await update.message.reply_text(f"🔍 Querying success rate for {time_range_text}...")
+        else:
+            status_message = await update.message.reply_text(f"🔍 正在查询{time_range_text}成功率...")
+        
+        try:
+            # 调用后端 API 查询成功率
+            from app.utils.api_client import api_client
+            result = await api_client.query_merchant_success_rate(merchant.merchant_code, time_range)
+            
+            # 删除状态消息
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+            
+            # 处理响应
+            if result.get("code") == 200:
+                merchant_id = result.get("merchant_id", merchant.merchant_code)
+                total_count = result.get("total_count", 0)
+                success_count = result.get("success_count", 0)
+                success_rate = result.get("success_rate", "0.00")
+                
+                if lang == "en":
+                    rate_text = (
+                        f"📊 Success Rate Query\n\n"
+                        f"🏪 Merchant ID: {merchant_id}\n"
+                        f"⏰ Time Range: {time_range_text}\n"
+                        f"📈 Total Orders: {total_count}\n"
+                        f"✅ Successful Orders: {success_count}\n"
+                        f"💯 Success Rate: {success_rate}%\n"
+                    )
+                else:
+                    rate_text = (
+                        f"📊 成功率查询\n\n"
+                        f"🏪 商户ID: {merchant_id}\n"
+                        f"⏰ 时间范围: {time_range_text}\n"
+                        f"📈 总订单数: {total_count}\n"
+                        f"✅ 成功订单数: {success_count}\n"
+                        f"💯 成功率: {success_rate}%\n"
+                    )
+                
+                await update.message.reply_text(rate_text)
+            else:
+                error_msg = result.get("msg", "Unknown error")
+                error_code = result.get("code", 500)
+                
+                if lang == "en":
+                    error_text = f"❌ Query failed\n\n"
+                    if error_code == 503:
+                        error_text += "🔌 Cannot connect to backend service\n"
+                        error_text += "Please contact administrator"
+                    elif error_code == 504:
+                        error_text += "⏱️ Request timeout\n"
+                        error_text += "Please try again later"
+                    else:
+                        error_text += f"Error: {error_msg}"
+                    
+                    await update.message.reply_text(error_text)
+                else:
+                    error_text = f"❌ 查询失败\n\n"
+                    if error_code == 503:
+                        error_text += "🔌 无法连接到后端服务\n"
+                        error_text += "请联系管理员检查后端服务状态"
+                    elif error_code == 504:
+                        error_text += "⏱️ 请求超时\n"
+                        error_text += "请稍后重试"
+                    else:
+                        error_text += f"错误信息：{error_msg}"
+                    
+                    await update.message.reply_text(error_text)
+                    
+        except Exception as api_error:
+            logger.exception(f"成功率查询 API 调用失败: {api_error}")
+            
+            try:
+                await status_message.delete()
+            except Exception:
+                pass
+            
+            if lang == "en":
+                await update.message.reply_text(
+                    "❌ Query failed\n\n"
+                    "System error occurred\n"
+                    "Please try again later or contact administrator"
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ 查询失败\n\n"
+                    "系统发生错误\n"
+                    "请稍后重试或联系管理员"
+                )
+                
+    except Exception as e:
+        logger.exception(f"处理成功率查询命令时发生错误: {e}")
+        
+        try:
+            if lang == "en":
+                await update.message.reply_text(
+                    "❌ An error occurred\n\n"
+                    "Please try again or use /help to see available commands"
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ 发生错误\n\n"
+                    "请重试或使用 /help 查看可用命令"
+                )
+        except Exception:
+            pass
 
 
 async def get_chat_id_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

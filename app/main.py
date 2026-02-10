@@ -62,6 +62,10 @@ def setup_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("upi", commands.upi_command))
     # 补单命令
     application.add_handler(CommandHandler("bd", commands.bd_command))
+    # 成功率查询命令
+    application.add_handler(CommandHandler("cgl_15m", commands.cgl_15m_command))
+    application.add_handler(CommandHandler("cgl_1h", commands.cgl_1h_command))
+    application.add_handler(CommandHandler("cgl_day", commands.cgl_day_command))
     # 订单查询别名
     application.add_handler(CommandHandler("cd", commands.order_command))
     application.add_handler(CommandHandler("zd", commands.order_command))

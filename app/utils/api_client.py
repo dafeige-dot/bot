@@ -176,6 +176,30 @@ class BackendAPIClient:
             "merchant_id": merchant_id,
             "upi": upi
         })
+    
+    async def query_merchant_success_rate(self, merchant_id: str, time_range: str) -> Dict[str, Any]:
+        """
+        查询商户成功率
+        
+        参数:
+            merchant_id: 商户号
+            time_range: 时间范围 (15m, 1h, d)
+        
+        返回:
+            {
+                "code": 200,
+                "msg": "success",
+                "merchant_id": "xxx",
+                "time_range": "15m",
+                "total_count": 100,
+                "success_count": 95,
+                "success_rate": "95.00"
+            }
+        """
+        return await self._post("merchant_success_rate", {
+            "merchant_id": merchant_id,
+            "time_range": time_range
+        })
 
 
 # 创建全局实例
