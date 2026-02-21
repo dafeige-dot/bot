@@ -38,6 +38,7 @@ services:
       - ./logs:/app/logs
       - ./uploads:/app/uploads
       - ./temp:/app/temp
+      - ./trans:/app/trans
     command: python run.py
     restart: unless-stopped
     networks:
