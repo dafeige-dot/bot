@@ -80,7 +80,9 @@ async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 有标题，根据标题查询订单
     logger.info(f"图片附带标题: {caption_text}，将进行订单查询")
-    await handle_order_search(update, context, caption_text.strip())
+    # 获取最大尺寸的图片对象，传给 handle_order_search 以便查询成功后另存
+    photo_obj = update.message.photo[-1] if update.message.photo else None
+    await handle_order_search(update, context, caption_text.strip(), photo_obj=photo_obj)
 
 
 async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
@@ -186,7 +188,7 @@ async def handle_upi_check(update: Update, context: ContextTypes.DEFAULT_TYPE,
         await processing_msg.edit_text("Not received yet" if lang == 'en' else "暂未收到")
 
 
-async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE, order_no: str):
+async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE, order_no: str, photo_obj=None):
     """处理订单搜索 - 调用后端 API"""
     user = update.effective_user
     chat = update.effective_chat
@@ -251,6 +253,28 @@ async def handle_order_search(update: Update, context: ContextTypes.DEFAULT_TYPE
             order_price = result.get("order_price", "0")
             real_pay = result.get("real_pay", "0")
             platform_order_no = result.get("order_num", "")
+            
+            # 如果有图片且获取到平台订单号，将图片另存到 trans/日期 目录
+            if photo_obj and platform_order_no:
+                try:
+                    import os
+                    import pathlib
+                    from datetime import datetime
+                    date_str = datetime.now().strftime("%Y-%m-%d")
+                    trans_dir = pathlib.Path("trans") / date_str
+                    trans_dir.mkdir(parents=True, exist_ok=True)
+                    # 下载图片文件
+                    tg_file = await context.bot.get_file(photo_obj.file_id)
+                    file_path = tg_file.file_path or ""
+                    # 从文件路径推断扩展名，默认 .jpg
+                    ext = os.path.splitext(file_path)[1] if file_path else ".jpg"
+                    if not ext:
+                        ext = ".jpg"
+                    save_path = trans_dir / f"{platform_order_no}{ext}"
+                    await tg_file.download_to_drive(str(save_path))
+                    logger.info(f"图片已另存: {save_path}")
+                except Exception as save_err:
+                    logger.warning(f"图片另存失败: {save_err}")
             mch_order_no = result.get("mch_order_no", "")
             utr = result.get("utr", "")
             
